@@ -77,6 +77,8 @@ AccessKeySecret = "腾讯云AKSecret"
 
 ### 4. API 使用 - 魔法操作！
 
+> #### [API文档](https://50swcphpjw.apifox.cn) <- 在这儿
+
 通过下面的 API，你可以像召唤魔法一样，轻松操作你的 DNS 记录和域名：
 
 #### 域名管理
