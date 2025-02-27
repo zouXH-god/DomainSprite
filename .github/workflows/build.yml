@@ -50,6 +50,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build  # 依赖 build job
 
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}  # 将 upload_url 设置为 Job 的输出
+
     steps:
       - name: Extract tag name
         id: extract_tag
@@ -92,7 +95,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ needs.createRelease.outputs.upload_url }}
           asset_path: artifacts/DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_content_type: application/octet-stream
