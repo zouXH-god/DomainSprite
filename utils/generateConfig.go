@@ -6,7 +6,7 @@ import (
 )
 
 func InitConfig(config string) bool {
-	configPath := "config.yaml"
+	configPath := "config.toml"
 	if _, err := os.ReadFile(configPath); err != nil {
 		fmt.Println("未找到配置文件，正在为你生成配置文件...")
 		os.WriteFile(configPath, []byte(config), 0644)
