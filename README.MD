@@ -15,17 +15,13 @@
 
 ## 🚀 快速开始
 
-### 1. 安装依赖
+### 1. 下载程序包
 
-首先，请确保你已经安装了 Go 和 Gin，开启你的魔法旅程：
-
-```bash
-go get github.com/gin-gonic/gin
-```
+> 前往 `release` 获取程序包，下载对应版本的程序包。
 
 ### 2. 配置文件
 
-> 复制 `config.yaml.example` 为 `config.yaml` 进行配置修改
+> 下载 `config.yaml.example` 并重命名 `config.yaml` 进行配置修改
 
 打开 `baseConfig` 和 `fastConfig` 部分，配置你的魔法阵：
 
@@ -74,6 +70,11 @@ Type = "Tencent"
 AccessKeyId = "腾讯云AKID"
 AccessKeySecret = "腾讯云AKSecret"
 ```
+
+### 5. 运行
+
+- Linux 系统执行 `chmod +x ./DomainSprite* && ./DomainSprite*`
+- Windows 系统双击 `DomainSprite.exe` 运行即可
 
 ### 4. API 使用 - 魔法操作！
 
