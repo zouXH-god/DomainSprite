@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        goos: [ linux, windows, darwin ]
+        goarch: [ amd64, arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.22
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Compile
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          OUTPUT_NAME=DomainSprite
+          if [ "${{ matrix.goos }}" == "windows" ]; then OUTPUT_NAME="${OUTPUT_NAME}.exe"; fi
+          go build -o build/${GOOS}-${GOARCH}/${OUTPUT_NAME} main.go
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/${{ matrix.goos }}-${{ matrix.goarch }}/DomainSprite*
+          if-no-files-found: warn
