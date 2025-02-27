@@ -88,6 +88,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}/DomainSprite*
+          asset_path: artifacts/DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_content_type: application/octet-stream
