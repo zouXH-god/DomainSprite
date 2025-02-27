@@ -72,6 +72,7 @@ jobs:
 
       - name: Create Release
         id: create_release
+        if: ${{ matrix.goos == 'linux' && matrix.goarch == 'amd64' }}  # 只在特定组合下执行
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -81,8 +82,11 @@ jobs:
           body: Release of version ${{ steps.extract_tag.outputs.tag_name }}
           draft: false
           prerelease: false
+        outputs:
+          release_created: ${{ steps.create_release.outputs.upload_url }}  # 上传 URL 作为标志
 
       - name: Upload Release Assets
+        if: ${{ steps.create_release.outputs.release_created }}  # 仅在发布创建成功后上传
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
