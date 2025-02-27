@@ -2,6 +2,7 @@ package main
 
 import (
 	"DDNSServer/models"
+	"DDNSServer/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -10,6 +11,9 @@ import (
 
 func main() {
 	gin.Logger()
+	if utils.InitConfig() {
+		return
+	}
 
 	r := gin.Default()
 
