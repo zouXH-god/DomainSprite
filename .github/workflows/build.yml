@@ -29,21 +29,21 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
-      - name: Compile
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          OUTPUT_NAME=DomainSprite
-          if [ "${{ matrix.goos }}" == "windows" ]; then OUTPUT_NAME="${OUTPUT_NAME}.exe"; fi
-          go build -o build/${GOOS}-${GOARCH}/${OUTPUT_NAME}
-
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: build/${{ matrix.goos }}-${{ matrix.goarch }}/DomainSprite*
-          if-no-files-found: warn
+#      - name: Compile
+#        env:
+#          GOOS: ${{ matrix.goos }}
+#          GOARCH: ${{ matrix.goarch }}
+#        run: |
+#          OUTPUT_NAME=DomainSprite
+#          if [ "${{ matrix.goos }}" == "windows" ]; then OUTPUT_NAME="${OUTPUT_NAME}.exe"; fi
+#          go build -o build/${GOOS}-${GOARCH}/${OUTPUT_NAME}
+#
+#      - name: Upload binaries
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
+#          path: build/${{ matrix.goos }}-${{ matrix.goarch }}/DomainSprite*
+#          if-no-files-found: warn
 
   release:
     name: Create Release and Upload Assets
@@ -85,6 +85,8 @@ jobs:
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pwd
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: artifacts/DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}/DomainSprite*
