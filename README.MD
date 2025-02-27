@@ -21,7 +21,7 @@
 
 ### 2. 配置文件
 
-> 下载 `config.yaml.example` 并重命名 `config.yaml` 进行配置修改
+> 对 `config.yaml` 进行配置修改
 
 打开 `baseConfig` 和 `fastConfig` 部分，配置你的魔法阵：
 

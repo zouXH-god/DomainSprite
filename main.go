@@ -3,15 +3,19 @@ package main
 import (
 	"DDNSServer/models"
 	"DDNSServer/utils"
+	_ "embed"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"log"
 	"time"
 )
 
+//go:embed config.yaml.example
+var config string
+
 func main() {
 	gin.Logger()
-	if utils.InitConfig() {
+	if utils.InitConfig(config) {
 		return
 	}
 
