@@ -106,5 +106,5 @@ jobs:
         with:
           upload_url: ${{ needs.createRelease.outputs.upload_url }}
           asset_path: ${{ steps.find-artifact.outputs.artifact_path }}
-          asset_name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
+          asset_name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
           asset_content_type: application/octet-stream
