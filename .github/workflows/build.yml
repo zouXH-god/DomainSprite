@@ -2,8 +2,8 @@ name: Build
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - v*  # 只有在推送标签时触发，例如 v1.0.0
 
 jobs:
   build:
