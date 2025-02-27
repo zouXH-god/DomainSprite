@@ -90,30 +90,21 @@ jobs:
         with:
           path: artifacts
 
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Show artifacts
+        id: find-artifact
+        run: |
+          # 查找指定目录下的第一个文件
+          ARTIFACT_PATH=$(find artifacts/DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }} -type f | head -n 1)
+          echo "Found artifact: $ARTIFACT_PATH"
+          # 将文件路径存储为输出变量，以便后续步骤使用
+          echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
 
-    - name: Download all build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-
-    - name: Show artifacts
-      id: find-artifact
-      run: |
-        # 查找指定目录下的第一个文件
-        ARTIFACT_PATH=$(find artifacts/DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }} -type f | head -n 1)
-        echo "Found artifact: $ARTIFACT_PATH"
-        # 将文件路径存储为输出变量，以便后续步骤使用
-        echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
-
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.createRelease.outputs.upload_url }}
-        asset_path: ${{ steps.find-artifact.outputs.artifact_path }}
-        asset_name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
-        asset_content_type: application/octet-stream
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.createRelease.outputs.upload_url }}
+          asset_path: ${{ steps.find-artifact.outputs.artifact_path }}
+          asset_name: DomainSprite-${{ matrix.goos }}-${{ matrix.goarch }}
+          asset_content_type: application/octet-stream
