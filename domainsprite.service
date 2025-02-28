@@ -1,0 +1,11 @@
+[Unit]
+Description=DomainSprite DDNS Service
+
+[Service]
+ExecStart=/root/ddns/DomainSprite-linux-amd64
+WorkingDirectory=/root/ddns
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
