@@ -31,10 +31,17 @@ type BaseConfig struct {
 	AccessKeySecret string `toml:"AccessKeySecret"`
 }
 
+type CertificateConfig struct {
+	EmailList  []string `toml:"EmailList"`
+	MaxRequest int      `toml:"MaxRequest"`
+	SavePath   string   `toml:"SavePath"`
+}
+
 type Config struct {
-	BaseConfig BaseConfig `toml:"baseConfig" json:"baseConfig"`
-	FastConfig FastConfig `toml:"fastConfig" json:"fastConfig"`
-	Accounts   []Account  `toml:"account" json:"account"`
+	BaseConfig  BaseConfig        `toml:"baseConfig" json:"baseConfig"`
+	Certificate CertificateConfig `toml:"certificateConfig" json:"certificateConfig"`
+	FastConfig  FastConfig        `toml:"fastConfig" json:"fastConfig"`
+	Accounts    []Account         `toml:"account" json:"account"`
 }
 
 var AccountConfig Config

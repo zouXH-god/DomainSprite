@@ -56,10 +56,10 @@ type RecordInfo struct {
 }
 
 type RecordProvider interface {
-	// GetRecordList 获取域名解析列表
-	GetRecordList(info DNSSearch) (result []RecordInfo, _err error)
 	// GetDomainList 获取域名列表
 	GetDomainList(info DomainsSearch) (result DomainList, _err error)
+	// GetRecordList 获取域名解析列表
+	GetRecordList(info DNSSearch) (result []RecordInfo, _err error)
 	// AddRecord 添加记录
 	AddRecord(info RecordInfo) (result RecordInfo, _err error)
 	// UpdateRecord 修改记录
