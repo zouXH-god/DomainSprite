@@ -1,6 +1,7 @@
 package cloudflare
 
 import (
+	"DDNSServer/db"
 	"DDNSServer/models"
 	"context"
 	"errors"
@@ -37,18 +38,24 @@ func (c *CloudflareProvider) GetDomainList(info models.DomainsSearch) (models.Do
 	var domainList []models.DomainInfo
 	for _, zone := range domains {
 		domainInfo := models.DomainInfo{
-			Id:          zone.ID,
-			DomainName:  zone.Name,
-			Status:      zone.Status,
 			Paused:      zone.Paused,
-			Type:        zone.Type,
 			NameServers: zone.NameServers,
-			CreateTime:  zone.CreatedOn,
-			UpdateTime:  zone.ModifiedOn,
-			DnsFrom:     DNSFromTag,
+			Domains: models.Domains{
+				Id:         zone.ID,
+				DomainName: zone.Name,
+				Status:     zone.Status,
+				Type:       zone.Type,
+				CreateTime: zone.CreatedOn,
+				UpdateTime: zone.ModifiedOn,
+				DnsFrom:    DNSFromTag,
+			},
 		}
 		ZoneList[zone.Name] = domainInfo
 		domainList = append(domainList, domainInfo)
+		err = db.AddDomainInfo(domainInfo)
+		if err != nil {
+			fmt.Println("域名加入数据库失败：", err)
+		}
 	}
 
 	return models.DomainList{

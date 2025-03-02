@@ -24,6 +24,8 @@ func registerRoutes(r *gin.Engine) {
 		api.DELETE("/:accountName/record", views.DeleteRecord)
 		// 修改域名解析记录状态
 		api.PUT("/:accountName/record/status", views.SetRecordStatus)
+		// 为域名申请通配符证书
+		api.POST("/:accountName/certificate", views.CreateCertificateView)
 	}
 	// 快速请求
 	fastRequest := r.Group("/fast")

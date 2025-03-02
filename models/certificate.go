@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
@@ -17,6 +18,14 @@ import (
 )
 
 var EmailIndex = 0
+
+type Resource struct {
+	certificate.Resource
+	PrivateKeyPath  string `json:"privateKeyPath"`  // 私钥文件路径
+	CertificatePath string `json:"certificatePath"` // 证书文件路径
+	IssuerCertPath  string `json:"issuerCertPath"`  // 发行者证书路径
+	CSRPath         string `json:"csrPath"`         // CSR 文件路径
+}
 
 type ClientManager struct {
 	Client       *lego.Client
@@ -128,21 +137,103 @@ func (p *CertificatePrivate) CleanUp(domain, token, keyAuth string) error {
 	return nil
 }
 
+func (p *CertificatePrivate) GetResourcePath() string {
+	return filepath.Join(p.SavePath, "resource.json")
+}
+
 // SaveCertificate 保存证书
 func (p *CertificatePrivate) SaveCertificate(certificates *certificate.Resource) error {
+	resource := Resource{}
+	resource.Resource = *certificates
+	resource.CertificatePath = filepath.Join(p.SavePath, "certificate.crt")
+	resource.PrivateKeyPath = filepath.Join(p.SavePath, "private.key")
+	resource.IssuerCertPath = filepath.Join(p.SavePath, "issuer.crt")
+	resource.CSRPath = filepath.Join(p.SavePath, "csr.csr")
+	// 创建保存路径
 	err := os.MkdirAll(p.SavePath, 0755)
 	if err != nil {
 		return fmt.Errorf("创建保存路径失败: %v", err)
 	}
-	err = os.WriteFile(filepath.Join(p.SavePath, "certificate.crt"), certificates.Certificate, 0644)
+	// 保存证书文件
+	err = os.WriteFile(resource.CertificatePath, certificates.Certificate, 0644)
 	if err != nil {
 		return fmt.Errorf("保存证书失败: %v", err)
 	}
-	err = os.WriteFile(filepath.Join(p.SavePath, "private.key"), certificates.PrivateKey, 0600)
+	err = os.WriteFile(resource.PrivateKeyPath, certificates.PrivateKey, 0600)
 	if err != nil {
 		return fmt.Errorf("保存密钥失败: %v", err)
 	}
+	err = os.WriteFile(resource.IssuerCertPath, certificates.IssuerCertificate, 0600)
+	if err != nil {
+		return fmt.Errorf("保存密钥失败: %v", err)
+	}
+	err = os.WriteFile(resource.CSRPath, certificates.CSR, 0600)
+	if err != nil {
+		return fmt.Errorf("保存密钥失败: %v", err)
+	}
+	// 序列化 JSON（包含路径字段）
+	jsonData, err := json.MarshalIndent(resource, "", "    ")
+	if err != nil {
+		return err
+	}
+	// 保存 JSON 文件
+	if err = os.WriteFile(p.GetResourcePath(), jsonData, 0644); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (p *CertificatePrivate) LoadResource() (*Resource, error) {
+	var resource Resource
+
+	// 读取 JSON 文件
+	jsonData, err := os.ReadFile(p.GetResourcePath())
+	if err != nil {
+		return &resource, err
+	}
+
+	// 反序列化 JSON 到结构体
+	if err := json.Unmarshal(jsonData, &resource); err != nil {
+		return &resource, err
+	}
+
+	// 根据路径读取 PrivateKey
+	if resource.PrivateKeyPath != "" {
+		if privateKeyData, err := os.ReadFile(resource.PrivateKeyPath); err == nil {
+			resource.PrivateKey = privateKeyData
+		} else if !os.IsNotExist(err) {
+			return &resource, err
+		}
+	}
+
+	// 根据路径读取 Certificate
+	if resource.CertificatePath != "" {
+		if certData, err := os.ReadFile(resource.CertificatePath); err == nil {
+			resource.Certificate = certData
+		} else if !os.IsNotExist(err) {
+			return &resource, err
+		}
+	}
+
+	// 根据路径读取 IssuerCertificate
+	if resource.IssuerCertPath != "" {
+		if issuerCertData, err := os.ReadFile(resource.IssuerCertPath); err == nil {
+			resource.IssuerCertificate = issuerCertData
+		} else if !os.IsNotExist(err) {
+			return &resource, err
+		}
+	}
+
+	// 根据路径读取 CSR
+	if resource.CSRPath != "" {
+		if csrData, err := os.ReadFile(resource.CSRPath); err == nil {
+			resource.CSR = csrData
+		} else if !os.IsNotExist(err) {
+			return &resource, err
+		}
+	}
+
+	return &resource, nil
 }
 
 func NewProvider(recordProvider RecordProvider, domain DomainInfo) *CertificatePrivate {

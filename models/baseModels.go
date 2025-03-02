@@ -4,18 +4,10 @@ import "time"
 
 // DomainInfo 域名信息
 type DomainInfo struct {
-	Id                  string       `json:"id"`                  // 域名ID
-	DomainName          string       `json:"domainName"`          // 域名
-	GroupId             string       `json:"groupId"`             // 域名组ID
-	GroupName           string       `json:"groupName"`           // 域名组名称
-	Status              string       `json:"status"`              // 域名状态
+	Domains
 	Paused              bool         `json:"paused"`              // 域名是否暂停
-	Type                string       `json:"type"`                // 域名类型
 	NameServers         []string     `json:"nameServers"`         // 域名解析服务器
 	OriginalNameServers []string     `json:"originalNameServers"` // 域名原始解析服务器
-	CreateTime          time.Time    `json:"createTime"`          // 域名创建时间
-	UpdateTime          time.Time    `json:"updateTime"`          // 域名更新时间
-	DnsFrom             string       `json:"dnsFrom"`             // 域名解析来源
 	RecordList          []RecordInfo `json:"recordList"`          // 域名记录列表
 }
 

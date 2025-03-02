@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"DDNSServer/db"
 	"DDNSServer/models"
 	"crypto/x509"
 	"encoding/pem"
@@ -84,11 +85,11 @@ func RenewCertificate(recordProvider models.RecordProvider, domain models.Domain
 }
 
 // ParseCertificate 函数解析PEM格式的证书并返回CertificateInfo结构体
-func ParseCertificate(pemData string) (*models.Certificate, error) {
+func ParseCertificate(pemData []byte) (*models.Certificate, error) {
 	var certDER []byte
 	// 解码PEM数据，提取第一个证书
 	for {
-		block, rest := pem.Decode([]byte(pemData))
+		block, _ := pem.Decode(pemData)
 		if block == nil {
 			break
 		}
@@ -96,7 +97,6 @@ func ParseCertificate(pemData string) (*models.Certificate, error) {
 			certDER = block.Bytes
 			break
 		}
-		pemData = string(rest)
 	}
 	// 如果没有找到证书，返回错误
 	if certDER == nil {
@@ -117,4 +117,16 @@ func ParseCertificate(pemData string) (*models.Certificate, error) {
 		CommonName: cert.Subject.CommonName,
 	}
 	return info, nil
+}
+
+func ParseCertificateAndSaveDb(pemData []byte) error {
+	info, err := ParseCertificate(pemData)
+	if err != nil {
+		return err
+	}
+	err = db.AddCertificateInfo(info)
+	if err != nil {
+		return err
+	}
+	return nil
 }

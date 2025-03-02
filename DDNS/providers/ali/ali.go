@@ -1,8 +1,10 @@
 package ali
 
 import (
+	"DDNSServer/db"
 	"DDNSServer/models"
 	"DDNSServer/utils"
+	"fmt"
 	alidns20150109 "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
@@ -48,13 +50,20 @@ func (c *AliDNSClient) GetDomainList(info models.DomainsSearch) (models.DomainLi
 		Domains:    []models.DomainInfo{},
 	}
 	for _, domain := range result.Body.Domains.Domain {
-		domainList.Domains = append(domainList.Domains, models.DomainInfo{
-			Id:         tea.StringValue(domain.DomainId),
-			DomainName: tea.StringValue(domain.DomainName),
-			GroupId:    tea.StringValue(domain.GroupId),
-			GroupName:  tea.StringValue(domain.GroupName),
-			DnsFrom:    DNSFromTag,
-		})
+		DomainInfo := models.DomainInfo{
+			Domains: models.Domains{
+				Id:         tea.StringValue(domain.DomainId),
+				DomainName: tea.StringValue(domain.DomainName),
+				GroupId:    tea.StringValue(domain.GroupId),
+				GroupName:  tea.StringValue(domain.GroupName),
+				DnsFrom:    DNSFromTag,
+			},
+		}
+		domainList.Domains = append(domainList.Domains, DomainInfo)
+		err := db.AddDomainInfo(DomainInfo)
+		if err != nil {
+			fmt.Println("域名加入数据库失败：", err)
+		}
 	}
 
 	return domainList, nil

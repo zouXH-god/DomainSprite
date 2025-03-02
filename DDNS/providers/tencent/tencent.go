@@ -1,6 +1,7 @@
 package tencent
 
 import (
+	"DDNSServer/db"
 	"DDNSServer/models"
 	"DDNSServer/utils"
 	"fmt"
@@ -55,12 +56,20 @@ func (c *TencentDNSClient) GetDomainList(info models.DomainsSearch) (models.Doma
 	}
 
 	for _, domain := range response.Response.DomainList {
-		RecordList.Domains = append(RecordList.Domains, models.DomainInfo{
-			Id:         strconv.FormatUint(*domain.DomainId, 10),
-			DomainName: tea.StringValue(domain.Name),
-			GroupId:    strconv.FormatUint(*domain.GroupId, 10),
-			DnsFrom:    DNSFromTag,
-		})
+		domainInfo := models.DomainInfo{
+			Domains: models.Domains{
+				Id:         strconv.FormatUint(*domain.DomainId, 10),
+				DomainName: tea.StringValue(domain.Name),
+				GroupId:    strconv.FormatUint(*domain.GroupId, 10),
+				DnsFrom:    DNSFromTag,
+			},
+		}
+		RecordList.Domains = append(RecordList.Domains, domainInfo)
+
+		err = db.AddDomainInfo(domainInfo)
+		if err != nil {
+			fmt.Println("域名加入数据库失败：", err)
+		}
 	}
 	return RecordList, nil
 }
