@@ -1,6 +1,7 @@
 package main
 
 import (
+	"DDNSServer/db"
 	"DDNSServer/models"
 	"DDNSServer/utils"
 	_ "embed"
@@ -17,6 +18,11 @@ func main() {
 	gin.Logger()
 	if utils.InitConfig(config) {
 		return
+	}
+	// 初始化数据库
+	err := db.InitDB()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	r := gin.Default()
@@ -36,7 +42,7 @@ func main() {
 	registerRoutes(r)
 
 	// 启动服务器
-	err := r.Run(models.AccountConfig.BaseConfig.Host + ":" + models.AccountConfig.BaseConfig.Port)
+	err = r.Run(models.AccountConfig.BaseConfig.Host + ":" + models.AccountConfig.BaseConfig.Port)
 	if err != nil {
 		log.Fatal(err)
 		return

@@ -2,8 +2,12 @@ package certificate
 
 import (
 	"DDNSServer/models"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"github.com/go-acme/lego/v4/certificate"
+	"strings"
 )
 
 // CreateCertificate 申请证书
@@ -77,4 +81,40 @@ func RenewCertificate(recordProvider models.RecordProvider, domain models.Domain
 
 	fmt.Println("证书续期成功！")
 	return renewedCert, nil
+}
+
+// ParseCertificate 函数解析PEM格式的证书并返回CertificateInfo结构体
+func ParseCertificate(pemData string) (*models.Certificate, error) {
+	var certDER []byte
+	// 解码PEM数据，提取第一个证书
+	for {
+		block, rest := pem.Decode([]byte(pemData))
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			certDER = block.Bytes
+			break
+		}
+		pemData = string(rest)
+	}
+	// 如果没有找到证书，返回错误
+	if certDER == nil {
+		return nil, errors.New("no CERTIFICATE found in PEM data")
+	}
+	// 解析DER格式的证书
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, err
+	}
+	// 填充 CertificateInfo 结构体
+	info := &models.Certificate{
+		Issuer:     cert.Issuer.String(),
+		Subject:    cert.Subject.String(),
+		NotBefore:  cert.NotBefore,
+		NotAfter:   cert.NotAfter,
+		DNSNames:   strings.Join(cert.DNSNames, ","),
+		CommonName: cert.Subject.CommonName,
+	}
+	return info, nil
 }
