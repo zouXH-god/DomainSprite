@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-//go:embed config.yaml.example
+//go:embed config.toml.example
 var config string
 
 func main() {
