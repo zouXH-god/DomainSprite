@@ -12,14 +12,14 @@ type Domains struct {
 	GroupName     string    `gorm:"null" json:"groupName"`      // 域名组名称
 	Status        string    `gorm:"null" json:"status"`         // 域名状态
 	Type          string    `gorm:"null" json:"type"`           // 域名类型
-	CertificateId string    `gorm:"null" json:"certificateId"`
+	CertificateId int       `gorm:"null" json:"certificateId"`
 	CreateTime    time.Time `gorm:"null" json:"createTime"`  // 域名创建时间
 	UpdateTime    time.Time `gorm:"null" json:"updateTime"`  // 域名更新时间
 	DnsFrom       string    `gorm:"not null" json:"dnsFrom"` // 域名解析来源
 }
 
 type Certificate struct {
-	Id         string    `gorm:"primaryKey" json:"id"`
+	Id         int       `gorm:"primaryKey" json:"id"`
 	SavePath   string    `gorm:"null" json:"savePath"`
 	Issuer     string    `gorm:"null" json:"issuer"`     // 颁发者
 	Subject    string    `gorm:"null" json:"subject"`    // 主题

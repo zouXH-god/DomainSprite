@@ -59,9 +59,17 @@ func AddDomainInfo(domainInfo models.DomainInfo) error {
 	return nil
 }
 
+// UpdateDomain 更新域名信息
+func UpdateDomain(domain models.Domains) error {
+	if err := DB.Model(&domain).Updates(&domain).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetCertificateForId 根据Id获取证书
-func GetCertificateForId(id string) (models.Certificate, error) {
-	if id == "" {
+func GetCertificateForId(id int) (models.Certificate, error) {
+	if id == 0 {
 		return models.Certificate{}, errors.New("certificateId is empty")
 	}
 	var certificate models.Certificate

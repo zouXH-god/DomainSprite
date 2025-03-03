@@ -12,21 +12,21 @@ import (
 )
 
 // CreateCertificate 申请证书
-func CreateCertificate(recordProvider models.RecordProvider, domain models.DomainInfo) (*certificate.Resource, error) {
+func CreateCertificate(recordProvider models.RecordProvider, domain models.DomainInfo) (*models.Resource, error) {
 	// 初始化 ClientManager
 	manager := models.ClientManager{}
 
 	// 获取客户端
 	client, err := manager.GetClient()
 	if err != nil {
-		return &certificate.Resource{}, err
+		return &models.Resource{}, err
 	}
 
 	// 配置 DNS-01 挑战
 	provider := models.NewProvider(recordProvider, domain)
 	err = client.Challenge.SetDNS01Provider(provider)
 	if err != nil {
-		return &certificate.Resource{}, fmt.Errorf("设置 DNS-01 挑战失败: %v", err)
+		return &models.Resource{}, fmt.Errorf("设置 DNS-01 挑战失败: %v", err)
 	}
 
 	// 申请证书
@@ -36,24 +36,24 @@ func CreateCertificate(recordProvider models.RecordProvider, domain models.Domai
 	}
 	certificates, err := client.Certificate.Obtain(request)
 	if err != nil {
-		return &certificate.Resource{}, fmt.Errorf("申请证书失败: %v", err)
+		return &models.Resource{}, fmt.Errorf("申请证书失败: %v", err)
 	}
 
 	// 增加请求计数
 	manager.RequestCount++
 
 	// 保存新证书
-	err = provider.SaveCertificate(certificates)
+	resource, err := provider.SaveCertificate(certificates)
 	if err != nil {
-		return certificates, err
+		return resource, err
 	}
 
 	fmt.Println("证书申请成功！")
-	return certificates, nil
+	return resource, nil
 }
 
 // RenewCertificate 续期证书
-func RenewCertificate(recordProvider models.RecordProvider, domain models.DomainInfo, existingCert *certificate.Resource) (*certificate.Resource, error) {
+func RenewCertificate(recordProvider models.RecordProvider, domain models.DomainInfo, existingCert *certificate.Resource) (*models.Resource, error) {
 	manager := models.ClientManager{}
 	client, err := manager.GetClient()
 	if err != nil {
@@ -75,21 +75,21 @@ func RenewCertificate(recordProvider models.RecordProvider, domain models.Domain
 	manager.RequestCount++
 
 	// 保存新证书
-	err = provider.SaveCertificate(renewedCert)
+	resource, err := provider.SaveCertificate(renewedCert)
 	if err != nil {
-		return renewedCert, err
+		return resource, err
 	}
 
 	fmt.Println("证书续期成功！")
-	return renewedCert, nil
+	return resource, nil
 }
 
 // ParseCertificate 函数解析PEM格式的证书并返回CertificateInfo结构体
-func ParseCertificate(pemData []byte) (*models.Certificate, error) {
+func ParseCertificate(resource *models.Resource) (*models.Certificate, error) {
 	var certDER []byte
 	// 解码PEM数据，提取第一个证书
 	for {
-		block, _ := pem.Decode(pemData)
+		block, _ := pem.Decode(resource.Certificate)
 		if block == nil {
 			break
 		}
@@ -109,6 +109,7 @@ func ParseCertificate(pemData []byte) (*models.Certificate, error) {
 	}
 	// 填充 CertificateInfo 结构体
 	info := &models.Certificate{
+		SavePath:   resource.SavePath,
 		Issuer:     cert.Issuer.String(),
 		Subject:    cert.Subject.String(),
 		NotBefore:  cert.NotBefore,
@@ -119,14 +120,14 @@ func ParseCertificate(pemData []byte) (*models.Certificate, error) {
 	return info, nil
 }
 
-func ParseCertificateAndSaveDb(pemData []byte) error {
-	info, err := ParseCertificate(pemData)
+func ParseCertificateAndSaveDb(resource *models.Resource) (*models.Certificate, error) {
+	info, err := ParseCertificate(resource)
 	if err != nil {
-		return err
+		return info, err
 	}
 	err = db.AddCertificateInfo(info)
 	if err != nil {
-		return err
+		return info, err
 	}
-	return nil
+	return info, nil
 }

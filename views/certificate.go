@@ -9,8 +9,8 @@ import (
 
 // CreateCertificateView 申请证书
 func CreateCertificateView(c *gin.Context) {
-	domainId := c.Query("domainId")
-	renew := c.Query("renew") == "true"
+	domainId := c.PostForm("domainId")
+	renew := c.PostForm("renew") == "true"
 	domain, err := db.GetDomainForId(domainId)
 	if err != nil {
 		c.JSON(400, gin.H{
@@ -50,10 +50,18 @@ func CreateCertificateView(c *gin.Context) {
 			return
 		}
 		// 查询新证书信息并保存
-		err = certificate.ParseCertificateAndSaveDb(certificateData.Certificate)
+		certificateNewDB, err := certificate.ParseCertificateAndSaveDb(certificateData)
 		if err != nil {
 			c.JSON(400, gin.H{
 				"message": "证书保存异常：" + err.Error(),
+			})
+			return
+		}
+		domain.CertificateId = certificateNewDB.Id
+		err = db.UpdateDomain(domain)
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "数据库更新异常：" + err.Error(),
 			})
 			return
 		}
@@ -70,10 +78,18 @@ func CreateCertificateView(c *gin.Context) {
 			return
 		}
 		// 查询新证书信息并保存
-		err = certificate.ParseCertificateAndSaveDb(certificateData.Certificate)
+		certificateNewDB, err := certificate.ParseCertificateAndSaveDb(certificateData)
 		if err != nil {
 			c.JSON(400, gin.H{
 				"message": "证书保存异常：" + err.Error(),
+			})
+			return
+		}
+		domain.CertificateId = certificateNewDB.Id
+		err = db.UpdateDomain(domain)
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "数据库更新异常：" + err.Error(),
 			})
 			return
 		}
