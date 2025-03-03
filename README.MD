@@ -124,6 +124,10 @@ AccessKeySecret = "腾讯云AKSecret"
   `PUT /api/:accountName/record/status`  
   启用或禁用 DNS 记录。
 
+- **一键申请通配符证书**  
+  `POST /api/:accountName/certificate`  
+  为指定域名申请通配符证书。
+
 #### 快速请求
 
 如果你需要快速更新记录，只需动动手指：
