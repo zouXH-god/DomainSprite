@@ -92,6 +92,8 @@ type CertificatePrivate struct {
 
 // Present 添加 TXT 记录以完成 DNS-01 挑战
 func (p *CertificatePrivate) Present(domain, token, keyAuth string) error {
+	// TODO 实现添加 TXT 记录提供 CNAME 的逻辑
+
 	// 解析挑战信息
 	fqdn := dns01.GetChallengeInfo(domain, keyAuth)
 	rr := strings.TrimSuffix(fqdn.FQDN, "."+domain+".")

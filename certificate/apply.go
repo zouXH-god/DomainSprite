@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// CreateCertificate 申请证书
+// CreateCertificate 全自动申请证书
 func CreateCertificate(recordProvider models.RecordProvider, domain models.DomainInfo) (*models.Resource, error) {
 	// 初始化 ClientManager
 	manager := models.ClientManager{}
@@ -52,7 +52,7 @@ func CreateCertificate(recordProvider models.RecordProvider, domain models.Domai
 	return resource, nil
 }
 
-// RenewCertificate 续期证书
+// RenewCertificate 全自动续期证书
 func RenewCertificate(recordProvider models.RecordProvider, domain models.DomainInfo, existingCert *certificate.Resource) (*models.Resource, error) {
 	manager := models.ClientManager{}
 	client, err := manager.GetClient()
@@ -120,6 +120,7 @@ func ParseCertificate(resource *models.Resource) (*models.Certificate, error) {
 	return info, nil
 }
 
+// ParseCertificateAndSaveDb 函数解析PEM格式的证书并保存到数据库中
 func ParseCertificateAndSaveDb(resource *models.Resource) (*models.Certificate, error) {
 	info, err := ParseCertificate(resource)
 	if err != nil {
