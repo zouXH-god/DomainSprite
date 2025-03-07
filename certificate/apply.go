@@ -24,6 +24,7 @@ func CreateCertificate(recordProvider models.RecordProvider, domain models.Domai
 
 	// 配置 DNS-01 挑战
 	provider := models.NewProvider(recordProvider, domain)
+	provider.SelfDomain = db.IsDomainExist(domain.DomainName)
 	err = client.Challenge.SetDNS01Provider(provider)
 	if err != nil {
 		return &models.Resource{}, fmt.Errorf("设置 DNS-01 挑战失败: %v", err)

@@ -43,6 +43,15 @@ func GetDomainForId(id string) (models.Domains, error) {
 	return domain, nil
 }
 
+// IsDomainExist 根据域名判断是否存在
+func IsDomainExist(domainName string) bool {
+	var domain models.Domains
+	if err := DB.Model(&domain).Where("domain_name = ?", domainName).First(&domain).Error; err == nil {
+		return true
+	}
+	return false
+}
+
 // AddDomainInfo 添加域名信息,不存在则创建
 func AddDomainInfo(domainInfo models.DomainInfo) error {
 	domain := DomainInfoToDomain(domainInfo)
@@ -65,6 +74,15 @@ func UpdateDomain(domain models.Domains) error {
 		return err
 	}
 	return nil
+}
+
+// GetCertificateList 获取证书列表
+func GetCertificateList(page, pageSize int) ([]models.Certificate, error) {
+	var certificates []models.Certificate
+	if err := DB.Model(&certificates).Limit(pageSize).Offset((page - 1) * pageSize).Find(&certificates).Error; err != nil {
+		return certificates, err
+	}
+	return certificates, nil
 }
 
 // GetCertificateForId 根据Id获取证书

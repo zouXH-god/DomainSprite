@@ -32,9 +32,12 @@ type BaseConfig struct {
 }
 
 type CertificateConfig struct {
-	EmailList  []string `toml:"EmailList"`
-	MaxRequest int      `toml:"MaxRequest"`
-	SavePath   string   `toml:"SavePath"`
+	EmailList       []string `toml:"EmailList"`
+	MaxRequest      int      `toml:"MaxRequest"`
+	SavePath        string   `toml:"SavePath"`
+	ApplyAccount    string   `toml:"ApplyAccount"`
+	ApplyDomainId   string   `toml:"ApplyDomainId"`
+	ApplyDomainName string   `toml:"ApplyDomainName"`
 }
 
 type Config struct {

@@ -27,6 +27,20 @@ func registerRoutes(r *gin.Engine) {
 		// 为域名申请通配符证书
 		api.POST("/:accountName/certificate", views.CreateCertificateView)
 	}
+	// 证书管理
+	certificate := r.Group("/certificate", views.ApiAuthentication)
+	{
+		// 获取证书列表
+		certificate.GET("/list", views.GetCertificateListView)
+		// 前置申请证书
+		certificate.GET("/apply", views.GetCertificateViewWithDomainInfo)
+		// 提交申请证书
+		certificate.POST("/apply", views.CreateCertificateViewWithDomainInfo)
+		// 获取证书信息
+		certificate.GET("/info", views.GetCertificateViewWithId)
+		// 下载证书
+		certificate.GET("/download", views.DownloadCertificateViewWithId)
+	}
 	// 快速请求
 	fastRequest := r.Group("/fast")
 	{

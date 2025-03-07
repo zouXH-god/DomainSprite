@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"github.com/alibabacloud-go/tea/tea"
+	"net"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -68,4 +70,30 @@ func HashStringWithCurrentTime(input string) string {
 	hashString := hex.EncodeToString(hash[:])
 
 	return hashString
+}
+
+// HashString 接受一个字符串对其进行哈希处理，返回前5位哈希字符串
+func HashString(input string) string {
+	// 计算 SHA-256 哈希值
+	hash := sha256.Sum256([]byte(input))
+
+	// 将哈希值转换为十六进制字符串
+	hashString := hex.EncodeToString(hash[:])
+
+	// 返回前5位哈希字符串
+	return hashString[:5]
+}
+
+// IsCNAMEEqual 判断第一个域名的 CNAME 值是否等于第二个域名
+func IsCNAMEEqual(domain1, domain2 string) bool {
+	// 解析 domain1 的 CNAME 记录
+	cname, err := net.LookupCNAME(domain1)
+	if err != nil {
+		// 如果解析失败，返回 false
+		return false
+	}
+	cname = strings.ReplaceAll(cname, ".", "")
+	domain2 = strings.ReplaceAll(domain2, ".", "")
+	// 将 CNAME 和 domain2 转换为小写后比较，忽略大小写
+	return strings.ToLower(cname) == strings.ToLower(domain2)
 }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"DDNSServer/utils"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -85,26 +86,37 @@ func (m *ClientManager) GetClient() (*lego.Client, error) {
 }
 
 type CertificatePrivate struct {
-	provider RecordProvider
-	domain   DomainInfo
-	SavePath string
+	provider   RecordProvider
+	domain     DomainInfo
+	SavePath   string
+	SelfDomain bool
 }
 
 // Present 添加 TXT 记录以完成 DNS-01 挑战
 func (p *CertificatePrivate) Present(domain, token, keyAuth string) error {
-	// TODO 实现添加 TXT 记录提供 CNAME 的逻辑
-
 	// 解析挑战信息
 	fqdn := dns01.GetChallengeInfo(domain, keyAuth)
-	rr := strings.TrimSuffix(fqdn.FQDN, "."+domain+".")
-
+	rr := strings.TrimSuffix(fqdn.FQDN, "."+domain+".") // _acme-challenge
 	// 构造 TXT 记录
-	record := RecordInfo{
-		DomainId:      p.domain.Id,
-		DomainName:    domain,
-		RecordName:    rr,
-		RecordType:    "TXT",
-		RecordContent: fqdn.Value,
+	record := RecordInfo{}
+
+	// 判断该域名是否存在数据库中，不存在按照第三方申请，获取其hash进行解析
+	if !p.SelfDomain {
+		record = RecordInfo{
+			DomainId:      AccountConfig.Certificate.ApplyDomainId,
+			DomainName:    AccountConfig.Certificate.ApplyDomainName,
+			RecordName:    utils.HashString(domain),
+			RecordType:    "TXT",
+			RecordContent: fqdn.Value,
+		}
+	} else {
+		record = RecordInfo{
+			DomainId:      p.domain.Id,
+			DomainName:    domain,
+			RecordName:    rr,
+			RecordType:    "TXT",
+			RecordContent: fqdn.Value,
+		}
 	}
 
 	// 添加记录
@@ -119,15 +131,27 @@ func (p *CertificatePrivate) Present(domain, token, keyAuth string) error {
 func (p *CertificatePrivate) CleanUp(domain, token, keyAuth string) error {
 	// 解析挑战信息
 	fqdn := dns01.GetChallengeInfo(domain, keyAuth)
-	rr := strings.TrimSuffix(fqdn.FQDN, "."+domain+".")
+	rr := strings.TrimSuffix(fqdn.FQDN, "."+domain+".") // _acme-challenge
+	// 构造 TXT 记录
+	search := DNSSearch{}
 
-	// 搜索现有记录
-	search := DNSSearch{
-		DomainId:    p.domain.Id,
-		DomainName:  domain,
-		RRKeyWord:   rr,
-		TypeKeyWord: "TXT",
+	// 判断该域名是否存在数据库中，不存在按照第三方申请，获取其hash进行解析
+	if !p.SelfDomain {
+		search = DNSSearch{
+			DomainId:    AccountConfig.Certificate.ApplyDomainId,
+			DomainName:  AccountConfig.Certificate.ApplyDomainName,
+			RRKeyWord:   utils.HashString(domain),
+			TypeKeyWord: "TXT",
+		}
+	} else {
+		search = DNSSearch{
+			DomainId:    p.domain.Id,
+			DomainName:  domain,
+			RRKeyWord:   rr,
+			TypeKeyWord: "TXT",
+		}
 	}
+
 	records, err := p.provider.GetRecordList(search)
 	if err != nil {
 		return fmt.Errorf("获取记录列表失败: %v", err)
@@ -153,6 +177,7 @@ func (p *CertificatePrivate) GetResourcePath() string {
 func (p *CertificatePrivate) SaveCertificate(certificates *certificate.Resource) (*Resource, error) {
 	resource := Resource{}
 	resource.Resource = *certificates
+	resource.SavePath = p.SavePath
 	resource.CertificatePath = filepath.Join(p.SavePath, "certificate.crt")
 	resource.PrivateKeyPath = filepath.Join(p.SavePath, "private.key")
 	resource.IssuerCertPath = filepath.Join(p.SavePath, "issuer.crt")

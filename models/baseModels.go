@@ -1,6 +1,8 @@
 package models
 
-import "time"
+import (
+	"time"
+)
 
 // DomainInfo 域名信息
 type DomainInfo struct {
