@@ -27,6 +27,7 @@ type Certificate struct {
 	NotAfter   time.Time `gorm:"null" json:"notAfter"`   // 有效期结束时间
 	DNSNames   string    `gorm:"null" json:"DNSNames"`   // SAN中的DNS名称
 	CommonName string    `gorm:"null" json:"commonName"` // 主题中的Common Name
+	DomainList string    `gorm:"null" json:"domainList"` // 允许的域名列表
 }
 
 // MatchesDomain 方法检查给定的域名是否与证书匹配

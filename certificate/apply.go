@@ -12,7 +12,7 @@ import (
 )
 
 // CreateCertificate 全自动申请证书
-func CreateCertificate(recordProvider models.RecordProvider, domain models.DomainInfo) (*models.Resource, error) {
+func CreateCertificate(recordProvider models.RecordProvider, domains []models.DomainInfo) (*models.Resource, error) {
 	// 初始化 ClientManager
 	manager := models.ClientManager{}
 
@@ -23,16 +23,23 @@ func CreateCertificate(recordProvider models.RecordProvider, domain models.Domai
 	}
 
 	// 配置 DNS-01 挑战
-	provider := models.NewProvider(recordProvider, domain)
-	provider.SelfDomain = db.IsDomainExist(domain.DomainName)
+	provider := models.NewProvider(recordProvider, domains[0])
+	provider.SelfDomain = db.IsDomainExist(domains[0].DomainName)
 	err = client.Challenge.SetDNS01Provider(provider)
 	if err != nil {
 		return &models.Resource{}, fmt.Errorf("设置 DNS-01 挑战失败: %v", err)
 	}
 
+	// 编辑域名信息
+	var domainList []string
+	for _, domain := range domains {
+		domainList = append(domainList, "*."+domain.DomainName)
+		domainList = append(domainList, domain.DomainName)
+	}
+
 	// 申请证书
 	request := certificate.ObtainRequest{
-		Domains: []string{"*." + domain.DomainName, domain.DomainName}, // 通配符和主域名
+		Domains: domainList, // 通配符和主域名
 		Bundle:  true,
 	}
 	certificates, err := client.Certificate.Obtain(request)
@@ -54,14 +61,15 @@ func CreateCertificate(recordProvider models.RecordProvider, domain models.Domai
 }
 
 // RenewCertificate 全自动续期证书
-func RenewCertificate(recordProvider models.RecordProvider, domain models.DomainInfo, existingCert *certificate.Resource) (*models.Resource, error) {
+func RenewCertificate(recordProvider models.RecordProvider, domain []models.DomainInfo, existingCert *certificate.Resource) (*models.Resource, error) {
 	manager := models.ClientManager{}
 	client, err := manager.GetClient()
 	if err != nil {
 		return nil, err
 	}
 
-	provider := models.NewProvider(recordProvider, domain)
+	// 配置 DNS-01 挑战
+	provider := models.NewProvider(recordProvider, domain[0])
 	err = client.Challenge.SetDNS01Provider(provider)
 	if err != nil {
 		return nil, fmt.Errorf("设置 DNS-01 挑战失败: %v", err)
@@ -108,6 +116,21 @@ func ParseCertificate(resource *models.Resource) (*models.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// 构建 DomainList，包含 CommonName 和 DNSNames，去重
+	domainMap := make(map[string]struct{}) // 使用 map 去重
+	if cert.Subject.CommonName != "" {
+		domainMap[cert.Subject.CommonName] = struct{}{}
+	}
+	for _, dnsName := range cert.DNSNames {
+		domainMap[dnsName] = struct{}{}
+	}
+	// 将 map 转换为切片
+	domainList := make([]string, 0, len(domainMap))
+	for domain := range domainMap {
+		domainList = append(domainList, domain)
+	}
+
 	// 填充 CertificateInfo 结构体
 	info := &models.Certificate{
 		SavePath:   resource.SavePath,
@@ -117,6 +140,7 @@ func ParseCertificate(resource *models.Resource) (*models.Certificate, error) {
 		NotAfter:   cert.NotAfter,
 		DNSNames:   strings.Join(cert.DNSNames, ","),
 		CommonName: cert.Subject.CommonName,
+		DomainList: strings.Join(domainList, ","),
 	}
 	return info, nil
 }
