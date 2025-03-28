@@ -75,7 +75,7 @@ func (c *TencentDNSClient) GetDomainList(info models.DomainsSearch) (models.Doma
 }
 
 // GetRecordList 获取域名解析列表
-func (c *TencentDNSClient) GetRecordList(info models.DNSSearch) ([]models.RecordInfo, error) {
+func (c *TencentDNSClient) GetRecordList(info models.DNSSearch) (models.RecordInfoList, error) {
 	request := dnspod.NewDescribeRecordListRequest()
 	request.Offset = common.Uint64Ptr(uint64((info.PageNumber - 1) * info.PageSize))
 	request.Limit = common.Uint64Ptr(uint64(info.PageSize))
@@ -84,9 +84,9 @@ func (c *TencentDNSClient) GetRecordList(info models.DNSSearch) ([]models.Record
 	response, err := c.client.DescribeRecordList(request)
 	if err != nil {
 		fmt.Println(err)
-		return nil, err
+		return models.RecordInfoList{}, err
 	}
-	var RecordList []models.RecordInfo
+	var RecordList models.RecordInfoList
 	for _, record := range response.Response.RecordList {
 		RecordInfo := models.RecordInfo{
 			Id:            strconv.FormatUint(*record.RecordId, 10),
@@ -102,8 +102,11 @@ func (c *TencentDNSClient) GetRecordList(info models.DNSSearch) ([]models.Record
 			DnsFrom:       DNSFromTag,
 		}
 		RecordListData[strconv.FormatUint(*record.RecordId, 10)] = RecordInfo
-		RecordList = append(RecordList, RecordInfo)
+		RecordList.Records = append(RecordList.Records, RecordInfo)
 	}
+	RecordList.TotalCount = int64(tea.Uint64Value(response.Response.RecordCountInfo.TotalCount))
+	RecordList.PageNumber = info.PageNumber
+	RecordList.PageSize = info.PageSize
 	return RecordList, nil
 }
 

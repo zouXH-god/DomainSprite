@@ -85,7 +85,7 @@ func getNotEmpty(s ...string) string {
 }
 
 // GetRecordList 实现 DomainProvider 接口，获取域名解析记录列表
-func (c *CloudflareProvider) GetRecordList(info models.DNSSearch) ([]models.RecordInfo, error) {
+func (c *CloudflareProvider) GetRecordList(info models.DNSSearch) (models.RecordInfoList, error) {
 	resourceContainer := getResourceContainer(info.DomainId)
 	ListDNSRecordsParams := cloudflare.ListDNSRecordsParams{
 		Type:    info.TypeKeyWord,
@@ -99,12 +99,12 @@ func (c *CloudflareProvider) GetRecordList(info models.DNSSearch) ([]models.Reco
 		Order:     info.OrderBy,
 		Match:     "any",
 	}
-	records, _, err := c.api.ListDNSRecords(context.Background(), &resourceContainer, ListDNSRecordsParams)
+	records, resultInfo, err := c.api.ListDNSRecords(context.Background(), &resourceContainer, ListDNSRecordsParams)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list DNS records: %w", err)
+		return models.RecordInfoList{}, fmt.Errorf("failed to list DNS records: %w", err)
 	}
 
-	var recordList []models.RecordInfo
+	var recordList models.RecordInfoList
 	for _, record := range records {
 		recordInfo := models.RecordInfo{
 			Id:            record.ID,
@@ -121,8 +121,11 @@ func (c *CloudflareProvider) GetRecordList(info models.DNSSearch) ([]models.Reco
 			DnsFrom:       DNSFromTag,
 		}
 		RecordList[record.ID] = recordInfo
-		recordList = append(recordList, recordInfo)
+		recordList.Records = append(recordList.Records, recordInfo)
 	}
+	recordList.PageSize = int64(resultInfo.PerPage)
+	recordList.PageNumber = int64(resultInfo.Page)
+	recordList.TotalCount = int64(resultInfo.Total)
 
 	return recordList, nil
 }

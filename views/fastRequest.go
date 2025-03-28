@@ -38,7 +38,7 @@ func getDomainRR(provider models.RecordProvider) string {
 		fmt.Print("Error GetRecordList:", err)
 		return ""
 	}
-	if len(list) > 0 {
+	if len(list.Records) > 0 {
 		// 存在递增继续拼接
 		FastData.LastId++
 		return getDomainRR(provider)

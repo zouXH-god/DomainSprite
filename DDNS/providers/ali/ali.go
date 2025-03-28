@@ -70,11 +70,11 @@ func (c *AliDNSClient) GetDomainList(info models.DomainsSearch) (models.DomainLi
 }
 
 // GetRecordList 获取域名解析记录列表
-func (c *AliDNSClient) GetRecordList(info models.DNSSearch) ([]models.RecordInfo, error) {
+func (c *AliDNSClient) GetRecordList(info models.DNSSearch) (models.RecordInfoList, error) {
 	describeDomainRecordsRequest := &alidns20150109.DescribeDomainRecordsRequest{}
 	utils.SetRequestFieldsWithTag(&info, describeDomainRecordsRequest, DNSFromTag)
 	runtime := &util.RuntimeOptions{}
-	var recordList []models.RecordInfo
+	var recordList models.RecordInfoList
 	result, _err := c.client.DescribeDomainRecordsWithOptions(describeDomainRecordsRequest, runtime)
 	if _err != nil {
 		return recordList, _err
@@ -93,8 +93,11 @@ func (c *AliDNSClient) GetRecordList(info models.DNSSearch) ([]models.RecordInfo
 			Weight:        tea.Int32Value(record.Weight),
 			DnsFrom:       DNSFromTag,
 		}
-		recordList = append(recordList, recordInfo)
+		recordList.Records = append(recordList.Records, recordInfo)
 	}
+	recordList.PageSize = tea.Int64Value(result.Body.PageSize)
+	recordList.PageNumber = tea.Int64Value(result.Body.PageNumber)
+	recordList.TotalCount = tea.Int64Value(result.Body.TotalCount)
 	return recordList, nil
 }
 

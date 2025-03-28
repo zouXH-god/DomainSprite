@@ -158,7 +158,7 @@ func (p *CertificatePrivate) CleanUp(domain, token, keyAuth string) error {
 	}
 
 	// 删除匹配的记录
-	for _, record := range records {
+	for _, record := range records.Records {
 		if fqdn.Value == keyAuth {
 			_, err := p.provider.DeleteRecord(domain, record.Id)
 			if err != nil {

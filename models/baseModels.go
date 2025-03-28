@@ -49,11 +49,18 @@ type RecordInfo struct {
 	WeightTC   uint64 `json:"weightTC" Tencent:"Weight"`
 }
 
+type RecordInfoList struct {
+	Records    []RecordInfo `json:"records"`
+	PageNumber int64        `json:"pageNumber"`
+	PageSize   int64        `json:"pageSize"`
+	TotalCount int64        `json:"totalCount"`
+}
+
 type RecordProvider interface {
 	// GetDomainList 获取域名列表
 	GetDomainList(info DomainsSearch) (result DomainList, _err error)
 	// GetRecordList 获取域名解析列表
-	GetRecordList(info DNSSearch) (result []RecordInfo, _err error)
+	GetRecordList(info DNSSearch) (result RecordInfoList, _err error)
 	// AddRecord 添加记录
 	AddRecord(info RecordInfo) (result RecordInfo, _err error)
 	// UpdateRecord 修改记录
