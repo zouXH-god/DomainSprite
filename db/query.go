@@ -56,7 +56,7 @@ func IsDomainExist(domainName string) bool {
 func AddDomainInfo(domainInfo models.DomainInfo) error {
 	domain := DomainInfoToDomain(domainInfo)
 	// 判断是否已经存在,存在则更新,不存在则创建
-	if err := DB.Model(&domain).Where("id = ?", domainInfo.Id).First(&domainInfo).Error; err == nil {
+	if err := DB.Model(&domain).Where("id = ?", domain.Id).First(&domain).Error; err == nil {
 		if err := DB.Model(&domain).Updates(&domain).Error; err != nil {
 			return err
 		}
