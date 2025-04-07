@@ -44,7 +44,7 @@ func TestUse(t *testing.T) {
 			return
 		}
 		recordOne := models.RecordInfo{}
-		for _, record := range records {
+		for _, record := range records.Records {
 			println(record.Id)
 			println(record.RecordName)
 			recordOne = record

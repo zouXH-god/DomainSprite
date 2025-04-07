@@ -8,8 +8,8 @@ import (
 type DomainInfo struct {
 	Domains
 	Paused              bool         `json:"paused"`              // 域名是否暂停
-	NameServers         []string     `json:"nameServers"`         // 域名解析服务器
-	OriginalNameServers []string     `json:"originalNameServers"` // 域名原始解析服务器
+	NameServers         string       `json:"nameServers"`         // 域名解析服务器
+	OriginalNameServers string       `json:"originalNameServers"` // 域名原始解析服务器
 	RecordList          []RecordInfo `json:"recordList"`          // 域名记录列表
 }
 

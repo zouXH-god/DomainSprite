@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cloudflare/cloudflare-go"
+	"strings"
 )
 
 const DNSFromTag = "Cloudflare"
@@ -39,7 +40,7 @@ func (c *CloudflareProvider) GetDomainList(info models.DomainsSearch) (models.Do
 	for _, zone := range domains {
 		domainInfo := models.DomainInfo{
 			Paused:      zone.Paused,
-			NameServers: zone.NameServers,
+			NameServers: strings.Join(zone.NameServers, ","),
 			Domains: models.Domains{
 				Id:         zone.ID,
 				DomainName: zone.Name,

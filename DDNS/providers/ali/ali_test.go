@@ -32,7 +32,7 @@ func TestAliDNSClient_GetRecordList(t *testing.T) {
 		println(err.Error())
 		return
 	}
-	for _, record := range list {
+	for _, record := range list.Records {
 		println(record.DomainName)
 		println(record.Id)
 		println(record.RecordName)
