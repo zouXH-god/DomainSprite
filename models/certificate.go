@@ -159,7 +159,7 @@ func (p *CertificatePrivate) CleanUp(domain, token, keyAuth string) error {
 
 	// 删除匹配的记录
 	for _, record := range records.Records {
-		if fqdn.Value == keyAuth {
+		if fqdn.Value == record.RecordContent {
 			_, err := p.provider.DeleteRecord(domain, record.Id)
 			if err != nil {
 				return fmt.Errorf("删除 TXT 记录失败: %v", err)
