@@ -5,6 +5,7 @@ import (
 )
 
 func (info *RecordInfo) ToTencent() {
+	info.Line = "默认"
 	info.IdTC, _ = strconv.ParseUint(info.Id, 10, 64)
 	info.DomainIdTC, _ = strconv.ParseUint(info.DomainId, 10, 64)
 	info.TtlTC = uint64(info.Ttl)
