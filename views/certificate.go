@@ -57,7 +57,7 @@ func CreateCertificateView(c *gin.Context) {
 	var domainInfoList []models.DomainInfo
 	var domainList []models.Domains
 	var err error
-	if len(domainIdList) > 0 {
+	if len(domainIdList) > 0 && domainIdList[0] != "" {
 		for _, dId := range domainIdList {
 			err = analyzeDomainForId(dId, &domainList, &domainInfoList)
 			if err != nil {
