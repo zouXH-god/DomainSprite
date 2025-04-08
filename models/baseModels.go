@@ -57,6 +57,8 @@ type RecordInfoList struct {
 }
 
 type RecordProvider interface {
+	// GetAccountInfo 获取账户信息
+	GetAccountInfo() (info Account)
 	// GetDomainList 获取域名列表
 	GetDomainList(info DomainsSearch) (result DomainList, _err error)
 	// GetRecordList 获取域名解析列表

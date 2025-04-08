@@ -13,12 +13,13 @@ import (
 
 type AliDNSClient struct {
 	client *alidns20150109.Client
+	info   models.Account
 }
 
 const DNSFromTag = "Ali"
 
 // NewAliDNSClient 创建 Ali 适配器实例
-func NewAliDNSClient(AccessKeyId, AccessKeySecret string) (*AliDNSClient, error) {
+func NewAliDNSClient(info models.Account, AccessKeyId, AccessKeySecret string) (*AliDNSClient, error) {
 	config := &openapi.Config{
 		AccessKeyId:     tea.String(AccessKeyId),
 		AccessKeySecret: tea.String(AccessKeySecret),
@@ -31,7 +32,11 @@ func NewAliDNSClient(AccessKeyId, AccessKeySecret string) (*AliDNSClient, error)
 		return nil, err
 	}
 
-	return &AliDNSClient{client: client}, nil
+	return &AliDNSClient{client: client, info: info}, nil
+}
+
+func (c *AliDNSClient) GetAccountInfo() (info models.Account) {
+	return c.info
 }
 
 // GetDomainList 获取域名列表
@@ -52,11 +57,12 @@ func (c *AliDNSClient) GetDomainList(info models.DomainsSearch) (models.DomainLi
 	for _, domain := range result.Body.Domains.Domain {
 		DomainInfo := models.DomainInfo{
 			Domains: models.Domains{
-				Id:         tea.StringValue(domain.DomainId),
-				DomainName: tea.StringValue(domain.DomainName),
-				GroupId:    tea.StringValue(domain.GroupId),
-				GroupName:  tea.StringValue(domain.GroupName),
-				DnsFrom:    DNSFromTag,
+				Id:          tea.StringValue(domain.DomainId),
+				DomainName:  tea.StringValue(domain.DomainName),
+				GroupId:     tea.StringValue(domain.GroupId),
+				GroupName:   tea.StringValue(domain.GroupName),
+				DnsFrom:     DNSFromTag,
+				AccountName: c.info.Name,
 			},
 		}
 		domainList.Domains = append(domainList.Domains, DomainInfo)

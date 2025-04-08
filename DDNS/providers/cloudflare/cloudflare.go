@@ -17,16 +17,21 @@ var RecordList = map[string]models.RecordInfo{}
 
 // CloudflareProvider 实现 Cloudflare 的适配器
 type CloudflareProvider struct {
-	api *cloudflare.API
+	api  *cloudflare.API
+	info models.Account
 }
 
 // NewCloudflareProvider 创建 Cloudflare 适配器实例
-func NewCloudflareProvider(apiKey, email string) (*CloudflareProvider, error) {
+func NewCloudflareProvider(info models.Account, apiKey, email string) (*CloudflareProvider, error) {
 	api, err := cloudflare.New(apiKey, email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Cloudflare API client: %w", err)
 	}
-	return &CloudflareProvider{api: api}, nil
+	return &CloudflareProvider{api: api, info: info}, nil
+}
+
+func (c *CloudflareProvider) GetAccountInfo() (info models.Account) {
+	return c.info
 }
 
 // GetDomainList 实现 DomainListProvider 接口，获取域名列表
@@ -42,13 +47,14 @@ func (c *CloudflareProvider) GetDomainList(info models.DomainsSearch) (models.Do
 			Paused:      zone.Paused,
 			NameServers: strings.Join(zone.NameServers, ","),
 			Domains: models.Domains{
-				Id:         zone.ID,
-				DomainName: zone.Name,
-				Status:     zone.Status,
-				Type:       zone.Type,
-				CreateTime: zone.CreatedOn,
-				UpdateTime: zone.ModifiedOn,
-				DnsFrom:    DNSFromTag,
+				Id:          zone.ID,
+				DomainName:  zone.Name,
+				Status:      zone.Status,
+				Type:        zone.Type,
+				CreateTime:  zone.CreatedOn,
+				UpdateTime:  zone.ModifiedOn,
+				DnsFrom:     DNSFromTag,
+				AccountName: c.info.Name,
 			},
 		}
 		ZoneList[zone.Name] = domainInfo

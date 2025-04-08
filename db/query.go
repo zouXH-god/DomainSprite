@@ -8,15 +8,16 @@ import (
 func mapDomainFields(domainInfo models.DomainInfo, domain models.Domains) (models.Domains, models.DomainInfo) {
 	return domainInfo.Domains, models.DomainInfo{
 		Domains: models.Domains{
-			Id:         domain.Id,
-			DomainName: domain.DomainName,
-			DnsFrom:    domain.DnsFrom,
-			GroupId:    domain.GroupId,
-			GroupName:  domain.GroupName,
-			Status:     domain.Status,
-			Type:       domain.Type,
-			CreateTime: domain.CreateTime,
-			UpdateTime: domain.UpdateTime,
+			Id:          domain.Id,
+			DomainName:  domain.DomainName,
+			DnsFrom:     domain.DnsFrom,
+			GroupId:     domain.GroupId,
+			GroupName:   domain.GroupName,
+			Status:      domain.Status,
+			Type:        domain.Type,
+			AccountName: domain.AccountName,
+			CreateTime:  domain.CreateTime,
+			UpdateTime:  domain.UpdateTime,
 		},
 	}
 }

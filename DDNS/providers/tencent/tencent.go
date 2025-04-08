@@ -15,13 +15,14 @@ import (
 
 type TencentDNSClient struct {
 	client *dnspod.Client
+	info   models.Account
 }
 
 var RecordListData = map[string]models.RecordInfo{}
 
 const DNSFromTag = "Tencent"
 
-func NewTencentProvider(secretId, secretKey string) (*TencentDNSClient, error) {
+func NewTencentProvider(info models.Account, secretId, secretKey string) (*TencentDNSClient, error) {
 	credential := common.NewCredential(
 		secretId,
 		secretKey,
@@ -36,7 +37,12 @@ func NewTencentProvider(secretId, secretKey string) (*TencentDNSClient, error) {
 	}
 	return &TencentDNSClient{
 		client: client,
+		info:   info,
 	}, nil
+}
+
+func (c *TencentDNSClient) GetAccountInfo() (info models.Account) {
+	return c.info
 }
 
 // GetDomainList 获取域名列表
@@ -58,10 +64,11 @@ func (c *TencentDNSClient) GetDomainList(info models.DomainsSearch) (models.Doma
 	for _, domain := range response.Response.DomainList {
 		domainInfo := models.DomainInfo{
 			Domains: models.Domains{
-				Id:         strconv.FormatUint(*domain.DomainId, 10),
-				DomainName: tea.StringValue(domain.Name),
-				GroupId:    strconv.FormatUint(*domain.GroupId, 10),
-				DnsFrom:    DNSFromTag,
+				Id:          strconv.FormatUint(*domain.DomainId, 10),
+				DomainName:  tea.StringValue(domain.Name),
+				GroupId:     strconv.FormatUint(*domain.GroupId, 10),
+				DnsFrom:     DNSFromTag,
+				AccountName: c.info.Name,
 			},
 		}
 		RecordList.Domains = append(RecordList.Domains, domainInfo)

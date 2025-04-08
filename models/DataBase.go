@@ -16,6 +16,7 @@ type Domains struct {
 	CreateTime    time.Time `gorm:"null" json:"createTime"`  // 域名创建时间
 	UpdateTime    time.Time `gorm:"null" json:"updateTime"`  // 域名更新时间
 	DnsFrom       string    `gorm:"not null" json:"dnsFrom"` // 域名解析来源
+	AccountName   string    `gorm:"null" json:"accountName"` // 域名所属账号名称
 }
 
 type Certificate struct {
