@@ -136,7 +136,7 @@ func (p *CertificatePrivate) CleanUp(domain, token, keyAuth string) error {
 	search := DNSSearch{}
 
 	// 判断该域名是否存在数据库中，不存在按照第三方申请，获取其hash进行解析
-	if !p.SelfDomain {
+	if !p.SelfDomain || p.provider.GetAccountInfo().Name != p.domain.AccountName {
 		search = DNSSearch{
 			DomainId:    AccountConfig.Certificate.ApplyDomainId,
 			DomainName:  AccountConfig.Certificate.ApplyDomainName,

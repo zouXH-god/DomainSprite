@@ -29,6 +29,7 @@ type BaseConfig struct {
 	Port            string `toml:"Port"`
 	AccessKeyId     string `toml:"AccessKeyId"`
 	AccessKeySecret string `toml:"AccessKeySecret"`
+	RedisPoint      string `toml:"RedisPoint" json:"redisPoint"`
 }
 
 type CertificateConfig struct {
@@ -38,6 +39,7 @@ type CertificateConfig struct {
 	ApplyAccount    string   `toml:"ApplyAccount"`
 	ApplyDomainId   string   `toml:"ApplyDomainId"`
 	ApplyDomainName string   `toml:"ApplyDomainName"`
+	ConcurrencyTask int      `toml:"ConcurrencyTask"`
 }
 
 type Config struct {

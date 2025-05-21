@@ -120,6 +120,7 @@ func UpdateForToken(c *gin.Context) {
 		})
 		return
 	}
+	// 判断当前解析记录是否一致
 	if fastData.RecordInfo.RecordContent == host {
 		c.JSON(200, gin.H{
 			"message": "host is same",
@@ -127,6 +128,7 @@ func UpdateForToken(c *gin.Context) {
 		})
 		return
 	} else {
+		// 获取快速解析账号
 		provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
 		if err != nil {
 			c.JSON(400, gin.H{
@@ -134,6 +136,7 @@ func UpdateForToken(c *gin.Context) {
 			})
 			return
 		}
+		// 修改解析
 		fastData.RecordInfo.RecordContent = host
 		fastData.RecordInfo, err = provider.UpdateRecord(fastData.RecordInfo)
 		if err != nil {
@@ -142,6 +145,7 @@ func UpdateForToken(c *gin.Context) {
 			})
 			return
 		}
+		// 更新记录信息
 		err = FastData.SaveToJson(fastDataPath)
 		if err != nil {
 			c.JSON(400, gin.H{

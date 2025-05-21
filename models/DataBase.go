@@ -21,6 +21,8 @@ type Domains struct {
 
 type Certificate struct {
 	Id         int       `gorm:"primaryKey" json:"id"`
+	State      string    `gorm:"null,default:'wait'" json:"state"` // 证书状态 wait 等待中 | apply 申请中 | success 申请成功 | fail 申请失败
+	TaskId     string    `gorm:"null" json:"taskId"`               // 任务ID
 	SavePath   string    `gorm:"null" json:"savePath"`
 	Issuer     string    `gorm:"null" json:"issuer"`     // 颁发者
 	Subject    string    `gorm:"null" json:"subject"`    // 主题

@@ -3,6 +3,7 @@ Host = "127.0.0.1"
 Port = "2485"
 AccessKeyId="P7yJRXMNBpeaCNAE47ZQ"
 AccessKeySecret="wRfD7GLzPyyBTJJWGQKFWmKhkoAJDKki"
+RedisPoint="localhost:6379"
 
 # 证书配置
 [certificateConfig]
@@ -13,6 +14,7 @@ SavePath="./certificateData/"  # 证书保存路径
 ApplyAccount="account1"  # 要使用的账户
 ApplyDomainId=""  # 要使用的域名id
 ApplyDomainName=""  # 要使用的域名
+ConcurrencyTask=10  # 证书申请任务并发数
 
 
 # 快速解析配置
