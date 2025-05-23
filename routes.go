@@ -40,6 +40,10 @@ func registerRoutes(r *gin.Engine) {
 		certificate.GET("/info", views.GetCertificateViewWithId)
 		// 下载证书
 		certificate.GET("/download", views.DownloadCertificateViewWithId)
+		// 获取证书任务列表
+		certificate.GET("/task", views.GetCertificateTaskInfoByCertificateId)
+		// 获取证书任务日志
+		certificate.GET("/task/log", views.GetTaskLog)
 	}
 	// 快速请求
 	fastRequest := r.Group("/fast")

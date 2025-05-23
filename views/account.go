@@ -2,6 +2,7 @@ package views
 
 import (
 	"DDNSServer/models"
+	"DDNSServer/models/requestModel"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,7 +17,5 @@ func GetAccounts(c *gin.Context) {
 		}
 		accountDatas = append(accountDatas, accountData)
 	}
-	c.JSON(200, gin.H{
-		"data": accountDatas,
-	})
+	requestModel.Success(c, accountDatas)
 }

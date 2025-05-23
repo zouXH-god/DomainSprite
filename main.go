@@ -1,6 +1,7 @@
 package main
 
 import (
+	"DDNSServer/certificate"
 	"DDNSServer/db"
 	"DDNSServer/models"
 	"DDNSServer/utils"
@@ -19,6 +20,8 @@ func main() {
 	if utils.InitConfig(config) {
 		return
 	}
+	// 启用证书任务
+	go certificate.StartTaskProcessor()
 	// 初始化数据库
 	err := db.InitDB()
 	if err != nil {

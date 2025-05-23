@@ -15,7 +15,7 @@ func InitDB() error {
 		return err
 	}
 	// 自动迁移（创建/更新表结构）
-	err = db.AutoMigrate(&models.Domains{}, &models.Certificate{})
+	err = db.AutoMigrate(&models.Domains{}, &models.Certificate{}, &models.CertificateTask{})
 	if err != nil {
 		return err
 	}

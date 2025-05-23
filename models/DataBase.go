@@ -33,6 +33,16 @@ type Certificate struct {
 	DomainList string    `gorm:"null" json:"domainList"` // 允许的域名列表
 }
 
+type CertificateTask struct {
+	Id         int       `gorm:"primaryKey" json:"id"`
+	CertId     int       `gorm:"null" json:"certId"`
+	TaskId     string    `gorm:"null" json:"taskId"`
+	LogPath    string    `gorm:"null" json:"logPath"`
+	State      string    `gorm:"null,default:'wait'" json:"state"` // 状态 wait 待处理 | apply 申请中 | success 申请成功 | fail 申请失败
+	Result     string    `gorm:"null" json:"result"`
+	CreateTime time.Time `gorm:"null" json:"createTime"`
+}
+
 // MatchesDomain 方法检查给定的域名是否与证书匹配
 func (c *Certificate) MatchesDomain(domain string) bool {
 	// 检查 Common Name 是否匹配

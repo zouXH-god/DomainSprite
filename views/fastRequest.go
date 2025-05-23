@@ -2,6 +2,7 @@ package views
 
 import (
 	"DDNSServer/models"
+	"DDNSServer/models/requestModel"
 	"DDNSServer/utils"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -51,25 +52,18 @@ func IpToDomainRecord(c *gin.Context) {
 	host := c.RemoteIP()
 	// 判断当前ip是否已经拥有记录
 	if fastData, ok := FastData.GetInfoForIp(host); ok {
-		c.JSON(200, gin.H{
-			"message": "record is exist",
-			"data":    fastData,
-		})
+		requestModel.Success(c, fastData)
 		return
 	}
 	provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	// 拼接出域名
 	domainRR := getDomainRR(provider)
 	if domainRR == "" {
-		c.JSON(400, gin.H{
-			"message": "Error Get DomainRR",
-		})
+		requestModel.BadRequest(c, "Error Get DomainRR")
 		return
 	}
 	// 新增解析
@@ -82,9 +76,7 @@ func IpToDomainRecord(c *gin.Context) {
 	}
 	recordInfo, err = provider.AddRecord(recordInfo)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	// 创建Token
@@ -97,16 +89,11 @@ func IpToDomainRecord(c *gin.Context) {
 	FastData.DataList = append(FastData.DataList, fastData)
 	err = FastData.SaveToJson(fastDataPath)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	// 返回记录和Token
-	c.JSON(200, gin.H{
-		"message": "success",
-		"data":    fastData,
-	})
+	requestModel.Success(c, fastData)
 }
 
 // UpdateForToken 更新Token对应的记录
@@ -115,47 +102,33 @@ func UpdateForToken(c *gin.Context) {
 	host := c.RemoteIP()
 	fastData, exist := FastData.GetInfoForToken(token)
 	if !exist {
-		c.JSON(400, gin.H{
-			"message": "Token Not Exist",
-		})
+		requestModel.BadRequest(c, "Token Not Exist")
 		return
 	}
 	// 判断当前解析记录是否一致
 	if fastData.RecordInfo.RecordContent == host {
-		c.JSON(200, gin.H{
-			"message": "host is same",
-			"data":    fastData,
-		})
+		requestModel.Success(c, fastData)
 		return
 	} else {
 		// 获取快速解析账号
 		provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
 		if err != nil {
-			c.JSON(400, gin.H{
-				"message": err.Error(),
-			})
+			requestModel.BadRequest(c, err.Error())
 			return
 		}
 		// 修改解析
 		fastData.RecordInfo.RecordContent = host
 		fastData.RecordInfo, err = provider.UpdateRecord(fastData.RecordInfo)
 		if err != nil {
-			c.JSON(400, gin.H{
-				"message": err.Error(),
-			})
+			requestModel.BadRequest(c, err.Error())
 			return
 		}
 		// 更新记录信息
 		err = FastData.SaveToJson(fastDataPath)
 		if err != nil {
-			c.JSON(400, gin.H{
-				"message": err.Error(),
-			})
+			requestModel.BadRequest(c, err.Error())
 			return
 		}
-		c.JSON(200, gin.H{
-			"message": "success",
-			"data":    fastData,
-		})
+		requestModel.Success(c, fastData)
 	}
 }

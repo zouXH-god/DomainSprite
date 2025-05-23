@@ -111,3 +111,24 @@ func AddCertificateInfo(certificateInfo *models.Certificate) error {
 	}
 	return nil
 }
+
+// GetTaskInfoList 获取任务日志列表
+func GetTaskInfoList(taskId string) ([]models.CertificateTask, error) {
+	if taskId == "" {
+		return []models.CertificateTask{}, errors.New("taskId is empty")
+	}
+	var taskList []models.CertificateTask
+	if err := DB.Model(&models.CertificateTask{}).Where("task_id = ?", taskId).Order("id desc").Find(&taskList).Error; err != nil {
+		return taskList, err
+	}
+	return taskList, nil
+}
+
+// GetTaskInfoById 获取任务具体信息
+func GetTaskInfoById(id int) (models.CertificateTask, error) {
+	var task models.CertificateTask
+	if err := DB.Model(&models.CertificateTask{}).Where("id = ?", id).First(&task).Error; err != nil {
+		return task, err
+	}
+	return task, nil
+}

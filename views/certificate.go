@@ -4,11 +4,12 @@ import (
 	"DDNSServer/certificate"
 	"DDNSServer/db"
 	"DDNSServer/models"
+	"DDNSServer/models/requestModel"
 	"DDNSServer/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"log/slog"
-	"strconv"
+	"net/http"
 	"strings"
 )
 
@@ -51,8 +52,13 @@ func GetCnameInfoForDomain(domainNameList []string) (cnameInfoList []CnameInfo) 
 
 // CreateCertificateView 申请证书(基于数据库一键申请)
 func CreateCertificateView(c *gin.Context) {
-	domainId := c.PostForm("domainId")
-	domainIdList := strings.Split(c.PostForm("domainIdList"), ",")
+	// 绑定参数
+	var request requestModel.CreateCertificateRequest
+	if err := c.Bind(&request); err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	domainIdList := strings.Split(request.DomainIdList, ",")
 	// 获取域名信息
 	var domainInfoList []models.DomainInfo
 	var domainList []models.Domains
@@ -64,18 +70,14 @@ func CreateCertificateView(c *gin.Context) {
 				break
 			}
 		}
-	} else if domainId != "" {
-		err = analyzeDomainForId(domainId, &domainList, &domainInfoList)
+	} else if request.DomainId != "" {
+		err = analyzeDomainForId(request.DomainId, &domainList, &domainInfoList)
 	} else {
-		c.JSON(400, gin.H{
-			"message": "请选择域名",
-		})
+		requestModel.BadRequest(c, "域名ID不能为空")
 		return
 	}
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	provider, err := getProvider(c)
@@ -88,9 +90,7 @@ func CreateCertificateView(c *gin.Context) {
 	certificateInfo := models.Certificate{State: "wait", TaskId: taskId}
 	err = db.DB.Model(&models.Certificate{}).Create(&certificateInfo).Error
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "证书记录创建失败：" + err.Error(),
-		})
+		requestModel.BadRequest(c, "证书记录创建失败："+err.Error())
 		return
 	}
 	// 创建任务
@@ -105,53 +105,50 @@ func CreateCertificateView(c *gin.Context) {
 			slog.Log(c, slog.LevelError, "更新域名信息失败", "domain", domain.DomainName)
 		}
 	}
-	c.JSON(200, gin.H{
-		"message": "ok",
-		"data": gin.H{
-			"taskId":      taskId,
-			"certificate": certificateInfo,
-		},
+	requestModel.Success(c, gin.H{
+		"taskId":      taskId,
+		"certificate": certificateInfo,
 	})
 }
 
 // GetCertificateListView 获取证书列表
 func GetCertificateListView(c *gin.Context) {
-	page := c.Query("page")
-	pageSize := c.Query("pageSize")
-	pageInt, err := strconv.Atoi(page)
-	if err != nil {
-		pageInt = 0
-	}
-	pageSizeInt, err := strconv.Atoi(pageSize)
-	if err != nil {
-		pageSizeInt = 10
-	}
-	certificateList, err := db.GetCertificateList(pageInt, pageSizeInt)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+	// 绑定参数
+	var request requestModel.GetCertificateListRequest
+	if err := c.Bind(&request); err != nil {
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "ok",
-		"data":    certificateList,
-	})
+	certificateList, err := db.GetCertificateList(request.Page, request.PageSize)
+	if err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	requestModel.Success(c, certificateList)
 }
 
 // GetCertificateViewWithDomainInfo 基于域名信息获取需要解析的内容
 func GetCertificateViewWithDomainInfo(c *gin.Context) {
-	domainNameList := strings.Split(c.Query("domainNameList"), ",")
+	// 绑定参数
+	var request requestModel.DomainNameListRequest
+	if err := c.Bind(&request); err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	domainNameList := strings.Split(request.DomainNameList, ",")
 	cnameInfoList := GetCnameInfoForDomain(domainNameList)
-	c.JSON(200, gin.H{
-		"message": "ok",
-		"data":    cnameInfoList,
-	})
+	requestModel.Success(c, cnameInfoList)
 }
 
 // CreateCertificateViewWithDomainInfo 申请证书(基于域名信息)
 func CreateCertificateViewWithDomainInfo(c *gin.Context) {
-	domainNameList := strings.Split(c.PostForm("domainNameList"), ",")
+	// 绑定参数
+	var request requestModel.DomainNameListRequest
+	if err := c.Bind(&request); err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	domainNameList := strings.Split(request.DomainNameList, ",")
 	cnameInfoList := GetCnameInfoForDomain(domainNameList)
 	// 判断是否所有域名CNAME解析到指定域名
 	var errorCnameInfo []CnameInfo
@@ -161,10 +158,7 @@ func CreateCertificateViewWithDomainInfo(c *gin.Context) {
 		}
 	}
 	if len(errorCnameInfo) > 0 {
-		c.JSON(400, gin.H{
-			"message": "未将所有域名CNAME解析到指定域名",
-			"data":    errorCnameInfo,
-		})
+		requestModel.BadRequestWithData(c, "请检查CNAME解析是否正确", errorCnameInfo)
 		return
 	}
 	// 申请证书
@@ -177,9 +171,7 @@ func CreateCertificateViewWithDomainInfo(c *gin.Context) {
 	// 获取账号信息
 	provider, err := getProviderForAccountName(models.AccountConfig.Certificate.ApplyAccount)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	// 创建空白证书记录
@@ -187,9 +179,7 @@ func CreateCertificateViewWithDomainInfo(c *gin.Context) {
 	certificateInfo := models.Certificate{State: "wait", TaskId: taskId}
 	err = db.DB.Model(&models.Certificate{}).Create(&certificateInfo).Error
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "证书记录创建失败：" + err.Error(),
-		})
+		requestModel.BadRequest(c, "证书记录创建失败："+err.Error())
 		return
 	}
 	// 创建任务
@@ -197,69 +187,106 @@ func CreateCertificateViewWithDomainInfo(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "ok",
-		"data": gin.H{
-			"taskId":      taskId,
-			"certificate": certificateInfo,
-		},
+	requestModel.Success(c, gin.H{
+		"taskId":      taskId,
+		"certificate": certificateInfo,
 	})
 }
 
 // GetCertificateViewWithId 根据id查询证书消息
 func GetCertificateViewWithId(c *gin.Context) {
-	idStr := c.Query("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+	// 绑定参数
+	var request requestModel.CertificateIdRequest
+	if err := c.Bind(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	certificateDB, err := db.GetCertificateForId(id)
+	certificateDB, err := db.GetCertificateForId(request.CertificateId)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(200, gin.H{
-		"message": "ok",
-		"data":    certificateDB,
-	})
+	requestModel.Success(c, certificateDB)
 }
 
 // DownloadCertificateViewWithId 根据id下载证书
 func DownloadCertificateViewWithId(c *gin.Context) {
-	idStr := c.Query("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+	// 绑定参数
+	var request requestModel.DownloadCertificateViewWithIdRequest
+	if err := c.Bind(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	downType := c.Query("type")
-	certificateDB, err := db.GetCertificateForId(id)
+	certificateDB, err := db.GetCertificateForId(request.CertificateId)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	certificatePrivate := models.CertificatePrivate{SavePath: certificateDB.SavePath}
 	// 读取证书信息
 	resource, err := certificatePrivate.LoadResource()
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": "证书历史读取失败：" + err.Error(),
-		})
+		requestModel.BadRequest(c, "证书历史读取失败："+err.Error())
+		return
 	}
-	switch downType {
+	switch request.DownloadType {
 	case "cert":
 		c.File(resource.CertificatePath)
 	case "key":
 		c.File(resource.PrivateKeyPath)
+	case "all":
+		zipPath, err := utils.ZipFolder(resource.SavePath)
+		if err != nil {
+			requestModel.BadRequest(c, "证书压缩失败："+err.Error())
+			return
+		}
+		c.File(zipPath)
 	}
 	return
+}
+
+// GetCertificateTaskInfoByCertificateId 根据证书id查询证书任务信息
+func GetCertificateTaskInfoByCertificateId(c *gin.Context) {
+	// 绑定参数
+	var request requestModel.CertificateIdRequest
+	if err := c.Bind(&request); err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	// 查询证书
+	certificateInfo, err := db.GetCertificateForId(request.CertificateId)
+	if err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	// 查询任务
+	taskList, err := db.GetTaskInfoList(certificateInfo.TaskId)
+	if err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	requestModel.Success(c, taskList)
+}
+
+// GetTaskLog 根据任务id查询任务日志
+func GetTaskLog(c *gin.Context) {
+	// 绑定参数
+	var request requestModel.TaskIdRequest
+	if err := c.Bind(&request); err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	// 查询任务信息
+	taskInfo, err := db.GetTaskInfoById(request.Id)
+	if err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	// 获取任务日志具体信息
+	taskLog, err := utils.ReadFileContent(taskInfo.LogPath)
+	if err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	requestModel.Success(c, taskLog)
 }

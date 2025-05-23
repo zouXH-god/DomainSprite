@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"DDNSServer/db"
 	"DDNSServer/models"
 	"context"
 	"encoding/json"
@@ -19,6 +20,7 @@ const TypeCertificateCreate = "certificate:create"
 type CreatePayload struct {
 	Provider       models.RecordProvider
 	DomainInfoList []models.DomainInfo
+	TaskDataId     int
 	TaskID         string
 	LogPath        string
 	Certificate    models.Certificate
@@ -32,10 +34,23 @@ func NewCertificateCreateTask(provider models.RecordProvider, domains []models.D
 	if err != nil {
 		slog.Log(context.Background(), slog.LevelError, "创建日志目录失败", err)
 	}
+	// 记录任务信息
+	taskData := models.CertificateTask{
+		TaskId:     TaskId,
+		CreateTime: time.Now(),
+		LogPath:    logPath,
+		State:      "wait",
+	}
+	err = db.DB.Create(&taskData).Error
+	if err != nil {
+		slog.Log(context.Background(), slog.LevelError, "创建任务记录失败", err)
+		return nil, err
+	}
 	// 创建任务负载
 	payload, err := json.Marshal(CreatePayload{
 		Provider:       provider,
 		DomainInfoList: domains,
+		TaskDataId:     taskData.Id,
 		TaskID:         TaskId,
 		LogPath:        logPath,
 		Certificate:    certificateInfo,
@@ -46,16 +61,33 @@ func NewCertificateCreateTask(provider models.RecordProvider, domains []models.D
 	return asynq.NewTask(TypeCertificateCreate, payload), nil
 }
 
-func HandleCertificateCreateTask(ctx context.Context, task *asynq.Task) error {
+func HandleCertificateCreateTask(ctx context.Context, task *asynq.Task) (err error) {
 	var p CreatePayload
-	if err := json.Unmarshal(task.Payload(), &p); err != nil {
-		return fmt.Errorf("反序列化任务负载失败: %w", err)
+	if err = json.Unmarshal(task.Payload(), &p); err != nil {
+		err = fmt.Errorf("反序列化任务负载失败: %w", err)
+		return
 	}
+	// 更新任务状态
+	defer func() {
+		var taskData models.CertificateTask
+		db.DB.Model(&models.CertificateTask{}).Where("id = ?", p.TaskDataId).First(&taskData)
+		if err != nil {
+			taskData.State = "fail"
+			taskData.Result = err.Error()
+		} else {
+			taskData.State = "success"
+		}
+		err := db.DB.Model(&models.CertificateTask{}).Save(&taskData).Error
+		if err != nil {
+			slog.Log(ctx, slog.LevelError, "更新任务记录失败", err)
+		}
+	}()
 
 	// 初始化日志文件输出
 	logFile, err := os.OpenFile(p.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("无法打开日志文件: %w", err)
+		err = fmt.Errorf("创建日志文件失败: %w", err)
+		return
 	}
 	defer logFile.Close()
 
@@ -84,14 +116,16 @@ func HandleCertificateCreateTask(ctx context.Context, task *asynq.Task) error {
 	certData, err := CreateCertificate(ctx, p.Provider, p.DomainInfoList)
 	if err != nil {
 		logger.Error("证书创建失败", "error", err)
-		return fmt.Errorf("证书创建失败: %w", err)
+		err = fmt.Errorf("证书创建失败: %w", err)
+		return
 	}
 
 	// 保存证书
 	_, err = ParseCertificateAndSaveDb(ctx, certData, &p.Certificate)
 	if err != nil {
 		logger.Error("证书保存失败", "error", err)
-		return fmt.Errorf("证书保存失败: %w", err)
+		err = fmt.Errorf("证书保存失败: %w", err)
+		return
 	}
 
 	logger.Info("证书创建任务完成",
@@ -101,7 +135,7 @@ func HandleCertificateCreateTask(ctx context.Context, task *asynq.Task) error {
 	return nil
 }
 
-func startTaskProcessor() {
+func StartTaskProcessor() {
 	redisOpt := asynq.RedisClientOpt{
 		Addr: models.AccountConfig.BaseConfig.RedisPoint,
 	}

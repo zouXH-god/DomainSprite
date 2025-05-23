@@ -3,6 +3,7 @@ package views
 import (
 	"DDNSServer/DDNS"
 	"DDNSServer/models"
+	"DDNSServer/models/requestModel"
 	"github.com/gin-gonic/gin"
 )
 
@@ -10,9 +11,7 @@ func getProvider(c *gin.Context) (models.RecordProvider, error) {
 	accountName := c.Params.ByName("accountName")
 	provider, err := getProviderForAccountName(accountName)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return nil, err
 	}
 	return provider, nil
@@ -36,9 +35,7 @@ func GetDomains(c *gin.Context) {
 	domainsSearch := models.DomainsSearch{}
 	err := c.Bind(&domainsSearch)
 	if err != nil {
-		c.JSON(500, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 
@@ -48,14 +45,10 @@ func GetDomains(c *gin.Context) {
 	}
 	domainList, err := provider.GetDomainList(domainsSearch)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(200, gin.H{
-		"data": domainList,
-	})
+	requestModel.Success(c, domainList)
 }
 
 // GetRecords 获取指定域名的解析记录
@@ -63,9 +56,7 @@ func GetRecords(c *gin.Context) {
 	recordSearch := models.DNSSearch{}
 	err := c.Bind(&recordSearch)
 	if err != nil {
-		c.JSON(500, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	provider, err := getProvider(c)
@@ -74,12 +65,8 @@ func GetRecords(c *gin.Context) {
 	}
 	recordList, err := provider.GetRecordList(recordSearch)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"message": err.Error(),
-		})
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(200, gin.H{
-		"data": recordList,
-	})
+	requestModel.Success(c, recordList)
 }
