@@ -3,56 +3,41 @@ package views
 import (
 	"DDNSServer/models"
 	"DDNSServer/models/requestModel"
-	"DDNSServer/utils"
+	"crypto/subtle"
+	"errors"
 	"fmt"
+	"log/slog"
+	"path/filepath"
+
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	fastDataFile = "fastData.json"
-)
+var fastStore *models.FastStore
 
-var FastData models.FastDataJson
-var fastDataPath string
-
-func init() {
-	fastDataPath = models.AccountConfig.FastConfig.DataPath + fastDataFile
-	var err error
-	FastData, err = models.GetFastData(fastDataPath)
+func InitFastStore() error {
+	s, err := models.NewFastStore(filepath.Join(models.AccountConfig.FastConfig.DataPath, "fastData.json"), models.AccountConfig.FastConfig.StartId)
 	if err != nil {
-		fmt.Println("Error Load FastData:", err)
+		return err
+	}
+	fastStore = s
+	return nil
+}
+func deprecatedFast(c *gin.Context) {
+	c.Header("Deprecation", "true")
+	if v := models.AccountConfig.Certificate.LegacyFastSunset; v != "" {
+		c.Header("Sunset", v)
+	}
+	c.Header("Link", "</fast/record>; rel=\"successor-version\"")
+}
+
+func IpToDomainRecord(c *gin.Context) {
+	if fastStore == nil {
+		requestModel.Error(c, 500, "快速 DDNS 未初始化", nil)
 		return
 	}
-}
-
-func getDomainRR(provider models.RecordProvider) string {
-	// 拼接出域名
-	id := fmt.Sprintf("%0*d", models.AccountConfig.FastConfig.IdLength, FastData.LastId)
-	domainRR := fmt.Sprintf("%s%s", models.AccountConfig.FastConfig.NameStrata, id)
-	// 判断这个解析是否存在
-	list, err := provider.GetRecordList(models.DNSSearch{
-		DomainId:   models.AccountConfig.FastConfig.DomainId,
-		DomainName: models.AccountConfig.FastConfig.DomainName,
-		KeyWord:    domainRR,
-	})
-	if err != nil {
-		fmt.Print("Error GetRecordList:", err)
-		return ""
-	}
-	if len(list.Records) > 0 {
-		// 存在递增继续拼接
-		FastData.LastId++
-		return getDomainRR(provider)
-	}
-	return domainRR
-}
-
-// IpToDomainRecord 获取IP对应的域名记录
-func IpToDomainRecord(c *gin.Context) {
 	host := c.RemoteIP()
-	// 判断当前ip是否已经拥有记录
-	if fastData, ok := FastData.GetInfoForIp(host); ok {
-		requestModel.Success(c, fastData)
+	if d, ok := fastStore.FindIP(host); ok {
+		requestModel.Success(c, d)
 		return
 	}
 	provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
@@ -60,75 +45,108 @@ func IpToDomainRecord(c *gin.Context) {
 		requestModel.BadRequest(c, err.Error())
 		return
 	}
-	// 拼接出域名
-	domainRR := getDomainRR(provider)
-	if domainRR == "" {
-		requestModel.BadRequest(c, "Error Get DomainRR")
-		return
-	}
-	// 新增解析
-	recordInfo := models.RecordInfo{
-		DomainId:      models.AccountConfig.FastConfig.DomainId,
-		DomainName:    models.AccountConfig.FastConfig.DomainName,
-		RecordName:    domainRR,
-		RecordType:    "A",
-		RecordContent: host,
-	}
-	recordInfo, err = provider.AddRecord(recordInfo)
+	var result models.FastData
+	err = fastStore.WithWrite(func(data *models.FastDataJson) error {
+		for _, d := range data.DataList {
+			if d.RecordInfo.RecordContent == host {
+				result = d
+				return nil
+			}
+		}
+		var name string
+		for {
+			name = fmt.Sprintf("%s%0*d", models.AccountConfig.FastConfig.NameStrata, models.AccountConfig.FastConfig.IdLength, data.LastId)
+			list, e := provider.GetRecordList(models.DNSSearch{DomainId: models.AccountConfig.FastConfig.DomainId, DomainName: models.AccountConfig.FastConfig.DomainName, KeyWord: name})
+			if e != nil {
+				return e
+			}
+			data.LastId++
+			if len(list.Records) == 0 {
+				break
+			}
+		}
+		record, e := provider.AddRecord(models.RecordInfo{DomainId: models.AccountConfig.FastConfig.DomainId, DomainName: models.AccountConfig.FastConfig.DomainName, RecordName: name, RecordType: "A", RecordContent: host})
+		if e != nil {
+			return e
+		}
+		token, e := models.NewFastToken()
+		if e != nil {
+			_, _ = provider.DeleteRecord(record.DomainName, record.Id)
+			return e
+		}
+		result = models.FastData{RecordInfo: record, Token: token}
+		data.DataList = append(data.DataList, result)
+		return nil
+	})
 	if err != nil {
-		requestModel.BadRequest(c, err.Error())
+		if result.RecordInfo.Id != "" {
+			if _, cleanupErr := provider.DeleteRecord(result.RecordInfo.DomainName, result.RecordInfo.Id); cleanupErr != nil {
+				slog.Error("快速 DDNS 本地保存失败且云端补偿失败", "error", cleanupErr)
+			}
+		}
+		requestModel.Error(c, 502, err.Error(), nil)
 		return
 	}
-	// 创建Token
-	Token := utils.HashStringWithCurrentTime(domainRR + recordInfo.DomainName + models.AccountConfig.FastConfig.AccessSalt)
-	// 保存这条记录
-	fastData := models.FastData{
-		RecordInfo: recordInfo,
-		Token:      Token,
-	}
-	FastData.DataList = append(FastData.DataList, fastData)
-	err = FastData.SaveToJson(fastDataPath)
-	if err != nil {
-		requestModel.BadRequest(c, err.Error())
-		return
-	}
-	// 返回记录和Token
-	requestModel.Success(c, fastData)
+	requestModel.Success(c, result)
 }
 
-// UpdateForToken 更新Token对应的记录
+type fastUpdateRequest struct {
+	Token string `json:"token" form:"token" binding:"required"`
+}
+
 func UpdateForToken(c *gin.Context) {
-	token := c.Query("token")
+	if fastStore == nil {
+		requestModel.Error(c, 500, "快速 DDNS 未初始化", nil)
+		return
+	}
+	var req fastUpdateRequest
+	if err := c.ShouldBind(&req); err != nil {
+		requestModel.BadRequest(c, err.Error())
+		return
+	}
 	host := c.RemoteIP()
-	fastData, exist := FastData.GetInfoForToken(token)
-	if !exist {
-		requestModel.BadRequest(c, "Token Not Exist")
+	provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
+	if err != nil {
+		requestModel.BadRequest(c, err.Error())
 		return
 	}
-	// 判断当前解析记录是否一致
-	if fastData.RecordInfo.RecordContent == host {
-		requestModel.Success(c, fastData)
+	var result models.FastData
+	err = fastStore.WithWrite(func(data *models.FastDataJson) error {
+		for i := range data.DataList {
+			d := &data.DataList[i]
+			found, _ := fastStoreTokenEqual(d.Token, req.Token)
+			if found {
+				if d.RecordInfo.RecordContent != host {
+					old := d.RecordInfo.RecordContent
+					d.RecordInfo.RecordContent = host
+					updated, e := provider.UpdateRecord(d.RecordInfo)
+					if e != nil {
+						d.RecordInfo.RecordContent = old
+						return e
+					}
+					d.RecordInfo = updated
+				}
+				result = *d
+				return nil
+			}
+		}
+		return errors.New("Token Not Exist")
+	})
+	if err != nil {
+		requestModel.BadRequest(c, err.Error())
 		return
-	} else {
-		// 获取快速解析账号
-		provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
-		if err != nil {
-			requestModel.BadRequest(c, err.Error())
-			return
-		}
-		// 修改解析
-		fastData.RecordInfo.RecordContent = host
-		fastData.RecordInfo, err = provider.UpdateRecord(fastData.RecordInfo)
-		if err != nil {
-			requestModel.BadRequest(c, err.Error())
-			return
-		}
-		// 更新记录信息
-		err = FastData.SaveToJson(fastDataPath)
-		if err != nil {
-			requestModel.BadRequest(c, err.Error())
-			return
-		}
-		requestModel.Success(c, fastData)
 	}
+	requestModel.Success(c, result)
+}
+
+func fastStoreTokenEqual(a, b string) (bool, error) {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1, nil
+}
+func LegacyIpToDomainRecord(c *gin.Context) { deprecatedFast(c); IpToDomainRecord(c) }
+func LegacyUpdateForToken(c *gin.Context) {
+	deprecatedFast(c)
+	if c.Query("token") != "" {
+		c.Request.Form = map[string][]string{"token": {c.Query("token")}}
+	}
+	UpdateForToken(c)
 }

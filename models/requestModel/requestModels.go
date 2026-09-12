@@ -14,6 +14,14 @@ type DomainNameListRequest struct {
 	DomainNameList string `form:"domainNameList" json:"domainNameList" uri:"domainNameList" binding:"required"`
 }
 
+type CertificateDomainRequest struct {
+	AccountName string `json:"accountName" binding:"required"`
+	DomainId    string `json:"domainId" binding:"required"`
+}
+type MultiAccountCertificateRequest struct {
+	Domains []CertificateDomainRequest `json:"domains" binding:"required,min=1,max=50,dive"`
+}
+
 type CertificateIdRequest struct {
 	CertificateId int `form:"certificateId" json:"certificateId" uri:"certificateId" binding:"required"`
 }

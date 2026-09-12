@@ -1,17 +1,34 @@
+//go:build integration
+
 package ali
 
 import (
 	"DDNSServer/models"
+	"os"
 	"testing"
 )
 
 var provider *AliDNSClient
 
+func TestMain(m *testing.M) {
+	if os.Getenv("DOMAINSprite_ALI_KEY_ID") == "" || os.Getenv("DOMAINSprite_ALI_KEY_SECRET") == "" {
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
 func Init() {
-	provider, _ = NewAliDNSClient("2222222222222", "333333333333333")
+	id, secret := os.Getenv("DOMAINSprite_ALI_KEY_ID"), os.Getenv("DOMAINSprite_ALI_KEY_SECRET")
+	if id == "" || secret == "" {
+		return
+	}
+	provider, _ = NewAliDNSClient(models.Account{Name: "integration", Type: "Ali"}, id, secret)
 }
 func TestGetDomainList(t *testing.T) {
 	Init()
+	if provider == nil {
+		t.Skip("Ali integration credentials not configured")
+	}
 	list, err := provider.GetDomainList(models.DomainsSearch{})
 	if err != nil {
 		println(err.Error())

@@ -3,21 +3,24 @@ package db
 import (
 	"DDNSServer/models"
 	"errors"
+	"gorm.io/gorm"
 )
 
 func mapDomainFields(domainInfo models.DomainInfo, domain models.Domains) (models.Domains, models.DomainInfo) {
 	return domainInfo.Domains, models.DomainInfo{
 		Domains: models.Domains{
-			Id:          domain.Id,
-			DomainName:  domain.DomainName,
-			DnsFrom:     domain.DnsFrom,
-			GroupId:     domain.GroupId,
-			GroupName:   domain.GroupName,
-			Status:      domain.Status,
-			Type:        domain.Type,
-			AccountName: domain.AccountName,
-			CreateTime:  domain.CreateTime,
-			UpdateTime:  domain.UpdateTime,
+			DBID:          domain.DBID,
+			Id:            domain.Id,
+			DomainName:    domain.DomainName,
+			DnsFrom:       domain.DnsFrom,
+			GroupId:       domain.GroupId,
+			GroupName:     domain.GroupName,
+			Status:        domain.Status,
+			Type:          domain.Type,
+			AccountName:   domain.AccountName,
+			CertificateId: domain.CertificateId,
+			CreateTime:    domain.CreateTime,
+			UpdateTime:    domain.UpdateTime,
 		},
 	}
 }
@@ -33,40 +36,43 @@ func DomainToDomainInfo(domain models.Domains) models.DomainInfo {
 }
 
 // GetDomainForId 根据id获取域名信息
-func GetDomainForId(id string) (models.Domains, error) {
+func GetDomainForId(accountName, id string) (models.Domains, error) {
 	if id == "" {
 		return models.Domains{}, errors.New("domainId is empty")
 	}
 	var domain models.Domains
-	if err := DB.Model(&domain).Where("id = ?", id).First(&domain).Error; err != nil {
+	if err := DB.Model(&domain).Where("id = ? AND account_name = ?", id, accountName).First(&domain).Error; err != nil {
 		return domain, err
 	}
 	return domain, nil
 }
 
 // IsDomainExist 根据域名判断是否存在
-func IsDomainExist(domainName string) bool {
+func IsDomainExist(accountName, dnsFrom, domainName string) (bool, error) {
 	var domain models.Domains
-	if err := DB.Model(&domain).Where("domain_name = ?", domainName).First(&domain).Error; err == nil {
-		return true
+	err := DB.Model(&domain).Where("domain_name = ? AND account_name = ? AND dns_from = ?", domainName, accountName, dnsFrom).First(&domain).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
 	}
-	return false
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // AddDomainInfo 添加域名信息,不存在则创建
 func AddDomainInfo(domainInfo models.DomainInfo) error {
 	domain := DomainInfoToDomain(domainInfo)
-	// 判断是否已经存在,存在则更新,不存在则创建
-	if err := DB.Model(&domain).Where("id = ?", domain.Id).First(&domain).Error; err == nil {
-		if err := DB.Model(&domain).Updates(&domain).Error; err != nil {
-			return err
-		}
-		return nil
+	var existing models.Domains
+	err := DB.Where("id = ? AND account_name = ? AND dns_from = ?", domain.Id, domain.AccountName, domain.DnsFrom).First(&existing).Error
+	if err == nil {
+		domain.DBID = existing.DBID
+		return DB.Model(&existing).Select("*").Updates(&domain).Error
 	}
-	if err := DB.Model(&domain).Create(&domain).Error; err != nil {
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	return nil
+	return DB.Create(&domain).Error
 }
 
 // UpdateDomain 更新域名信息
@@ -79,6 +85,15 @@ func UpdateDomain(domain models.Domains) error {
 
 // GetCertificateList 获取证书列表
 func GetCertificateList(page, pageSize int) ([]models.Certificate, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
 	var certificates []models.Certificate
 	if err := DB.Model(&certificates).Limit(pageSize).Offset((page - 1) * pageSize).Find(&certificates).Error; err != nil {
 		return certificates, err
@@ -100,16 +115,10 @@ func GetCertificateForId(id int) (models.Certificate, error) {
 
 // AddCertificateInfo 添加证书信息,不存在则创建
 func AddCertificateInfo(certificateInfo *models.Certificate) error {
-	// 判断是否已经存在,存在则更新,不存在则创建
-	if err := DB.Model(&certificateInfo).Where("id = ?", certificateInfo.Id).First(&certificateInfo).Error; err == nil {
-		if err := DB.Model(&certificateInfo).Updates(&certificateInfo).Error; err != nil {
-			return err
-		}
-		return nil
+	if certificateInfo == nil {
+		return errors.New("certificateInfo is nil")
 	}
-	if err := DB.Model(&certificateInfo).Create(&certificateInfo).Error; err != nil {
-	}
-	return nil
+	return DB.Save(certificateInfo).Error
 }
 
 // GetTaskInfoList 获取任务日志列表
@@ -131,4 +140,13 @@ func GetTaskInfoById(id int) (models.CertificateTask, error) {
 		return task, err
 	}
 	return task, nil
+}
+
+func GetTaskInfoByTaskID(taskID string) (models.CertificateTask, error) {
+	if taskID == "" {
+		return models.CertificateTask{}, errors.New("taskId is empty")
+	}
+	var task models.CertificateTask
+	err := DB.Where("task_id = ?", taskID).First(&task).Error
+	return task, err
 }

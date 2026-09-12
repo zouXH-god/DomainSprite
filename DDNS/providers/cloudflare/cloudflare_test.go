@@ -1,13 +1,20 @@
+//go:build integration
+
 package cloudflare
 
 import (
 	"DDNSServer/models"
+	"os"
 	"testing"
 )
 
 func TestUse(t *testing.T) {
 
-	provider, err := NewCloudflareProvider("2222222222222222", "3333333333333@gmail.com")
+	key, email := os.Getenv("DOMAINSprite_CF_API_KEY"), os.Getenv("DOMAINSprite_CF_EMAIL")
+	if key == "" || email == "" {
+		t.Skip("Cloudflare integration credentials not configured")
+	}
+	provider, err := NewCloudflareProvider(models.Account{Name: "integration", Type: "Cloudflare"}, key, email)
 	if err != nil {
 		return
 	}

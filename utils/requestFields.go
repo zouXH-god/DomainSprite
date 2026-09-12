@@ -92,8 +92,8 @@ func IsCNAMEEqual(domain1, domain2 string) bool {
 		// 如果解析失败，返回 false
 		return false
 	}
-	cname = strings.ReplaceAll(cname, ".", "")
-	domain2 = strings.ReplaceAll(domain2, ".", "")
+	cname = strings.TrimSuffix(cname, ".")
+	domain2 = strings.TrimSuffix(domain2, ".")
 	// 将 CNAME 和 domain2 转换为小写后比较，忽略大小写
 	return strings.ToLower(cname) == strings.ToLower(domain2)
 }

@@ -1,4 +1,39 @@
-# 🌟 DomainSprite README 🎮
+# DomainSprite
+
+DomainSprite 是一个支持阿里云、腾讯云和 Cloudflare 的 DNS 与证书生命周期管理服务。发布二进制已内嵌 Vue 管理控制台，启动后直接访问后端地址即可使用，无需单独部署静态文件。
+
+## 管理控制台
+
+- `/`：概览、DNS 解析、证书申请/续期、任务日志与设置。
+- `/quick`：独立快速 DDNS 页面，不读取管理 API 凭据。
+- 首次进入需填写 `AccessKeyId` 与 `AccessKeySecret`；只有明确选择保存时才应长期保留凭据。
+- 证书任务页面按 `taskId` 展示结构化 JSONL 时间线，运行中每 2 秒轮询，终态自动停止。
+
+如果部署平台提供密钥管理系统，可以显式设置持久化主密钥，例如 PowerShell：
+
+```powershell
+$env:DOMAINSPRITE_MASTER_KEY = [Convert]::ToBase64String([byte[]](1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+未设置环境变量时，程序会自动生成并复用 `config.toml.master-key`，因此本地开发无需手工设置。生产环境建议将生成值放入安全的部署密钥管理系统；更换或丢失该值会导致数据库中的 DNS/ACME 凭据无法解密。空数据库启动时，日志会输出一个 30 分钟有效的一次性 Setup Token，管理页面用它创建首个管理员。
+
+DNS 厂商账户、ACME Profile、AccessKey、用户、域名授权节点和运行参数均保存在 SQLite。旧 TOML 业务配置只在升级后的第一次启动事务导入，此后数据库为唯一来源；确认导入成功后应删除 TOML 备份中的旧明文凭据。
+
+域名权限支持 `example.com`、`dev.example.com`、`api.dev.example.com` 等节点。子域节点仍映射到真实厂商 Zone，默认授权整个子树，不会建立虚假的 DNS Zone。
+
+本地开发可运行根目录 `start.bat`。脚本检查 Go、Node.js 与 npm，安装前端依赖，并在当前控制台同时运行后端 `127.0.0.1:2485` 和 Vite `127.0.0.1:5173`，不再创建额外窗口。任一服务退出后会清理另一服务；按 `R` 可原地重启两者，按回车退出，`Ctrl+C` 停止整个开发环境。生产构建顺序为：
+
+```text
+cd webui
+npm ci
+npm run typecheck
+npm test
+npm run build
+cd ..
+go build .
+```
+
+前端产物位于 `webui/dist`，由 Go `embed` 编译进单文件二进制。`/assets/*` 使用 immutable 缓存，SPA 的 `index.html` 不缓存；未命中的 API 路由始终返回 JSON 404。
 
 **DomainSprite** 是一个 DNS 记录管理工具，可以方便的管理多平台的 DNS 记录，并且集成 SSL 证书申请，可以简单的为自己的域名或其他域名进行通配符证书申请
 
@@ -212,3 +247,59 @@ curl -H "AccessKeyId: 你的魔法钥匙ID" -H "AccessKeySecret: 你的魔法密
 ``` 
 
 享受魔法，享受世界！🌈
+
+## 运行可靠性与迁移说明
+
+- 服务按“配置校验 → 数据目录 → SQLite 迁移 → Redis 检查 → worker → HTTP”的顺序启动；Redis 不可用时不会接受证书任务。
+- 首次涉及新版域名身份模型的启动会在数据库旁生成带时间戳的 `database.db.bak.*` 备份。迁移失败时服务不会启动。
+- 证书状态依次为 `wait`、`apply`、`success` 或 `fail`。入队失败返回 HTTP 503，并清理本次数据库记录。
+- 本项目仍按单实例部署设计；快速 DDNS 使用加锁和原子替换保护本地 JSON，但不支持多个进程共享该文件。
+
+新的快速 DDNS 写接口为 `POST /fast/ip2a` 和 `PUT /fast/record`。更新接口应在 JSON body 中传递 `{"token":"..."}`。旧的 `GET /fast/ip2a` 和 `GET /fast/updateRecord?token=...` 暂时兼容，并通过 `Deprecation`、`Sunset`、`Link` 响应头提示迁移。
+
+浏览器调用时，应在 `baseConfig.AllowedOrigins` 中明确列出可信来源。不要使用通配来源携带凭据。
+
+默认测试完全离线：
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+首次启动时若当前目录不存在 `config.toml`，程序会从内嵌模板自动创建该文件。同时，如果配置指定的 `DOMAINSPRITE_MASTER_KEY` 环境变量尚未设置，会生成随机 256-bit 数据库主密钥，保存为 `config.toml.master-key` 并仅注入当前进程。后续启动会复用该文件，绝不会重新生成或覆盖已有环境变量。请将主密钥文件与数据库一同备份，且不要提交到版本库；遗失主密钥将无法解密数据库中的 DNS/ACME 凭据。
+
+真实云厂商测试使用 `integration` build tag，并且仅应配置专用测试账户：
+
+```bash
+go test -tags=integration ./...
+```
+
+### 多账户证书与续期
+
+跨账户、跨厂商申请使用：
+
+```http
+POST /certificate/apply/accounts
+Content-Type: application/json
+
+{"domains":[{"accountName":"aliyun-main","domainId":"123"},{"accountName":"cloudflare-main","domainId":"zone-id"}]}
+```
+
+服务会为每个基础域名同时申请主域名和通配符 SAN，最多接受 50 个基础域名。域名必须是不带 `*.`、协议、端口或路径的合法 DNS 名称。
+
+手工续期使用 `POST /certificate/:id/renew`。服务每日扫描一次剩余有效期不超过 30 天的当前证书，并为续期创建新版本；新版本成功前不会替换域名正在使用的旧证书。证书阶段为 `wait → challenging → issued → persisted → success`，重试会从 staging 文件恢复，避免 CA 已签发后重复申请。
+
+每个任务的结构化 JSONL 日志保存在 `certificateData/logs/{taskId}.log`，可通过 `GET /certificate/task/{taskId}/log` 直接查询。日志包含任务、重试、stage、DNS provider、ACME、staging 和数据库提交事件，但不会记录云密钥、challenge 值、私钥或完整证书资源。
+
+### 独立证书节点
+
+主控可通过 `[grpc]` 基础设施配置中的 `Enabled=true` 启用独立 gRPC TLS 监听，默认关闭。启用时必须同时配置有效的 `TLSCertFile`、`TLSKeyFile` 和供节点连接的 `PublicURL`。管理员在“证书节点”页面创建节点组与一次性注册 Token；Token 默认 10 分钟失效且注册成功后立即作废。
+
+```text
+DomainSpriteNode install --name "node-a" --remark "华东节点" --controller "https://controller.example.com:2486" --token "一次性Token"
+```
+
+缺少参数时安装程序会交互询问。Linux 自动安装并启用 systemd 服务，Windows 注册为自动启动且失败重启的 Windows Service；另支持 `run`、`status`、`restart`、`uninstall`。节点身份配置位于 `/etc/domainsprite-node/node.json` 或 `%ProgramData%\DomainSprite\node.json`，权限必须仅限系统管理员。
+
+节点主动建立 mTLS 双向流，因此可部署在 NAT 后。调度器只选择用户获授权组中在线、未 drain、provider 能力匹配且 ACME 邮箱额度未耗尽的节点，并按 `运行任务数 / 容量` 选择。签发开始前的过期 lease 可以重新分配；进入 `challenging` 后固定原节点，避免重复消耗 CA 配额。

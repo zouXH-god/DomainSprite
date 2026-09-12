@@ -8,17 +8,18 @@ import (
 	"fmt"
 	"github.com/cloudflare/cloudflare-go"
 	"strings"
+	"sync"
 )
 
 const DNSFromTag = "Cloudflare"
 
-var ZoneList = map[string]models.DomainInfo{}
-var RecordList = map[string]models.RecordInfo{}
-
 // CloudflareProvider 实现 Cloudflare 的适配器
 type CloudflareProvider struct {
-	api  *cloudflare.API
-	info models.Account
+	api     *cloudflare.API
+	info    models.Account
+	mu      sync.RWMutex
+	zones   map[string]models.DomainInfo
+	records map[string]models.RecordInfo
 }
 
 // NewCloudflareProvider 创建 Cloudflare 适配器实例
@@ -27,7 +28,7 @@ func NewCloudflareProvider(info models.Account, apiKey, email string) (*Cloudfla
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Cloudflare API client: %w", err)
 	}
-	return &CloudflareProvider{api: api, info: info}, nil
+	return &CloudflareProvider{api: api, info: info, zones: map[string]models.DomainInfo{}, records: map[string]models.RecordInfo{}}, nil
 }
 
 func (c *CloudflareProvider) GetAccountInfo() (info models.Account) {
@@ -57,7 +58,9 @@ func (c *CloudflareProvider) GetDomainList(info models.DomainsSearch) (models.Do
 				AccountName: c.info.Name,
 			},
 		}
-		ZoneList[zone.Name] = domainInfo
+		c.mu.Lock()
+		c.zones[zone.Name] = domainInfo
+		c.mu.Unlock()
 		domainList = append(domainList, domainInfo)
 		err = db.AddDomainInfo(domainInfo)
 		if err != nil {
@@ -127,7 +130,9 @@ func (c *CloudflareProvider) GetRecordList(info models.DNSSearch) (models.Record
 			UpdateTime:    record.ModifiedOn,
 			DnsFrom:       DNSFromTag,
 		}
-		RecordList[record.ID] = recordInfo
+		c.mu.Lock()
+		c.records[record.ID] = recordInfo
+		c.mu.Unlock()
 		recordList.Records = append(recordList.Records, recordInfo)
 	}
 	recordList.PageSize = int64(resultInfo.PerPage)
@@ -184,6 +189,9 @@ func (c *CloudflareProvider) UpdateRecord(info models.RecordInfo) (models.Record
 	if err != nil {
 		return models.RecordInfo{}, fmt.Errorf("failed to update DNS record: %w", err)
 	}
+	c.mu.Lock()
+	delete(c.records, info.Id)
+	c.mu.Unlock()
 
 	return info, nil
 }
@@ -201,6 +209,9 @@ func (c *CloudflareProvider) DeleteRecord(DomainName string, recordId string) (m
 	if err != nil {
 		return models.RecordInfo{}, fmt.Errorf("failed to delete DNS record: %w", err)
 	}
+	c.mu.Lock()
+	delete(c.records, recordId)
+	c.mu.Unlock()
 
 	return record, nil
 }
@@ -220,12 +231,17 @@ func (c *CloudflareProvider) SetRecordStatus(DomainName string, recordId string,
 
 // GetRecordInfo 实现 RecordProvider 接口，获取记录信息
 func (c *CloudflareProvider) GetRecordInfo(DomainName string, recordId string) (models.RecordInfo, error) {
-	RecordInfo := RecordList[recordId]
+	c.mu.RLock()
+	RecordInfo := c.records[recordId]
+	c.mu.RUnlock()
 	if RecordInfo.Id != "" {
 		return RecordInfo, nil
 	} else {
 		// 判断 ZoneList 是否已初始化
-		if len(ZoneList) == 0 {
+		c.mu.RLock()
+		empty := len(c.zones) == 0
+		c.mu.RUnlock()
+		if empty {
 			_, err := c.GetDomainList(models.DomainsSearch{
 				PageNumber: 1,
 				PageSize:   100,
@@ -235,7 +251,9 @@ func (c *CloudflareProvider) GetRecordInfo(DomainName string, recordId string) (
 			}
 		}
 		// 获取域名对应的信息
-		zone := ZoneList[DomainName]
+		c.mu.RLock()
+		zone := c.zones[DomainName]
+		c.mu.RUnlock()
 		if zone.Id == "" {
 			return models.RecordInfo{}, errors.New("domain not found")
 		}
@@ -259,7 +277,9 @@ func (c *CloudflareProvider) GetRecordInfo(DomainName string, recordId string) (
 			UpdateTime:    record.ModifiedOn,
 			DnsFrom:       DNSFromTag,
 		}
-		RecordList[record.ID] = recordInfo
+		c.mu.Lock()
+		c.records[record.ID] = recordInfo
+		c.mu.Unlock()
 		return recordInfo, nil
 	}
 }

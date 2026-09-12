@@ -1,0 +1,38 @@
+syntax = "proto3";
+package node.v1;
+option go_package = "DDNSServer/api/node/v1;nodev1";
+
+service NodeService {
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+  rpc Connect(stream NodeMessage) returns (stream ControllerMessage);
+  rpc RotateIdentity(RotateIdentityRequest) returns (RotateIdentityResponse);
+  rpc GetControllerInfo(ControllerInfoRequest) returns (ControllerInfoResponse);
+}
+
+message RegisterNodeRequest { string protocol_version=1; string name=2; string remark=3; string token=4; bytes csr_pem=5; int32 capacity=6; }
+message RegisterNodeResponse { uint64 node_id=1; bytes client_certificate_pem=2; bytes client_ca_pem=3; int64 expires_unix=4; }
+message RotateIdentityRequest { uint64 node_id=1; bytes csr_pem=2; }
+message RotateIdentityResponse { bytes client_certificate_pem=1; int64 expires_unix=2; }
+message ControllerInfoRequest {}
+message ControllerInfoResponse { string protocol_version=1; string version=2; int32 heartbeat_seconds=3; int64 max_artifact_bytes=4; }
+
+message NodeMessage {
+  string protocol_version=1; uint64 node_id=2; string task_id=3; string lease_id=4; uint64 sequence=5; int64 timestamp_unix=6;
+  oneof payload { Hello hello=10; Heartbeat heartbeat=11; AssignmentAck assignment_ack=12; StageEvent stage_event=13; LogEvent log_event=14; ArtifactChunk artifact_chunk=15; CleanupResult cleanup_result=16; Completion completion=17; }
+}
+message ControllerMessage {
+  string protocol_version=1; uint64 node_id=2; string task_id=3; string lease_id=4; uint64 sequence=5; int64 timestamp_unix=6;
+  oneof payload { Assignment assignment=10; Cancel cancel=11; CompletionAck completion_ack=12; }
+}
+message Hello { string version=1; int32 capacity=2; repeated string providers=3; repeated ResumeManifest resumes=4; }
+message ResumeManifest { string task_id=1; string lease_id=2; string stage=3; string sha256=4; }
+message Heartbeat { int32 running=1; int64 free_disk_bytes=2; }
+message AssignmentAck { bool accepted=1; string reason=2; }
+message StageEvent { string stage=1; string domain=2; string provider=3; int32 attempt=4; }
+message LogEvent { string level=1; string event=2; string message=3; int64 duration_ms=4; }
+message ArtifactChunk { string name=1; uint64 offset=2; bytes data=3; uint64 total_size=4; string sha256=5; bool final=6; }
+message CleanupResult { string record_id=1; bool success=2; string error=3; }
+message Completion { bool success=1; string error=2; string domains_fingerprint=3; }
+message Assignment { bytes encrypted_payload=1; int64 lease_expires_unix=2; string stage=3; }
+message Cancel { string reason=1; }
+message CompletionAck { bool accepted=1; string error=2; }

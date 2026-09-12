@@ -3,27 +3,19 @@ package views
 import (
 	"DDNSServer/models"
 	"DDNSServer/models/requestModel"
+	"crypto/subtle"
 	"github.com/gin-gonic/gin"
 )
 
+func secureEqual(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
+
 func ApiAuthentication(c *gin.Context) {
-	accessKeyId := c.GetHeader("AccessKeyId")
-	accessKeySecret := c.GetHeader("AccessKeySecret")
-	if accessKeyId == "" || accessKeySecret == "" {
-		requestModel.Forbidden(c, "AccessKeyId or AccessKeySecret is empty")
-		c.Abort()
-		return
-	}
-	if accessKeyId != models.AccountConfig.BaseConfig.AccessKeyId || accessKeySecret != models.AccountConfig.BaseConfig.AccessKeySecret {
-		requestModel.Forbidden(c, "AccessKeyId or AccessKeySecret is error")
-		c.Abort()
-		return
-	}
+	IdentityAuthentication(c)
 }
 
 func FastAuthentication(c *gin.Context) {
 	accessSalt := c.GetHeader("AccessSalt")
-	if accessSalt == "" || accessSalt != models.AccountConfig.FastConfig.AccessSalt {
+	if accessSalt == "" || !secureEqual(accessSalt, models.AccountConfig.FastConfig.AccessSalt) {
 		requestModel.Forbidden(c, "AccessSalt is error")
 		c.Abort()
 		return

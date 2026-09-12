@@ -1,0 +1,44 @@
+webui/node_modules/
+webui/.npm-cache/
+webui/*.tsbuildinfo
+webui/src/**/*.js
+webui/vite.config.js
+webui/vite.config.d.ts
+webui/test-results/
+webui/playwright-report/
+webui/dist/*
+!webui/dist/index.html
+build/
+config.toml.master-key
+
+# Local runtime configuration and secrets
+config.toml
+.env
+.env.*
+!.env.example
+tls/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Runtime databases, generated state and certificate material
+*.db
+*.db-*
+*.db.*
+data/
+certificateData/
+staging/
+node.json
+fastData.json
+
+# Logs, coverage and local tooling
+*.log
+logs/
+coverage/
+coverage.out
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -20,15 +20,23 @@ func GetRecordInfo(c *gin.Context) {
 		requestModel.BadRequest(c, err.Error())
 		return
 	}
+	if !canUseDomain(c, c.Param("accountName"), recordFQDN(recordInfo.RecordName, domainName), 1) {
+		requestModel.Forbidden(c, "无权访问该记录")
+		return
+	}
 	requestModel.Success(c, recordInfo)
 }
 
 // AddRecord 添加解析记录
 func AddRecord(c *gin.Context) {
 	recordInfo := models.RecordInfo{}
-	err := c.Bind(&recordInfo)
+	err := c.ShouldBind(&recordInfo)
 	if err != nil {
 		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	if !canUseDomain(c, c.Param("accountName"), recordFQDN(recordInfo.RecordName, recordInfo.DomainName), 2) {
+		requestModel.Forbidden(c, "无权修改该记录")
 		return
 	}
 	provider, err := getProvider(c)
@@ -46,9 +54,13 @@ func AddRecord(c *gin.Context) {
 // UpdateRecord 更新解析记录
 func UpdateRecord(c *gin.Context) {
 	recordInfo := models.RecordInfo{}
-	err := c.Bind(&recordInfo)
+	err := c.ShouldBind(&recordInfo)
 	if err != nil {
 		requestModel.BadRequest(c, err.Error())
+		return
+	}
+	if !canUseDomain(c, c.Param("accountName"), recordFQDN(recordInfo.RecordName, recordInfo.DomainName), 2) {
+		requestModel.Forbidden(c, "无权修改该记录")
 		return
 	}
 	provider, err := getProvider(c)
@@ -67,6 +79,10 @@ func UpdateRecord(c *gin.Context) {
 func DeleteRecord(c *gin.Context) {
 	domainName := c.Query("domainName")
 	recordId := c.Query("recordId")
+	if !canUseDomain(c, c.Param("accountName"), domainName, 2) {
+		requestModel.Forbidden(c, "无权删除该记录")
+		return
+	}
 
 	provider, err := getProvider(c)
 	if err != nil {
@@ -85,6 +101,10 @@ func SetRecordStatus(c *gin.Context) {
 	domainName := c.Query("domainName")
 	recordId := c.Query("recordId")
 	status := c.Query("status")
+	if !canUseDomain(c, c.Param("accountName"), domainName, 2) {
+		requestModel.Forbidden(c, "无权修改该记录")
+		return
+	}
 
 	provider, err := getProvider(c)
 	if err != nil {

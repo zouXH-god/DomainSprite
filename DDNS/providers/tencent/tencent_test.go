@@ -1,18 +1,35 @@
+//go:build integration
+
 package tencent
 
 import (
 	"DDNSServer/models"
+	"os"
 	"testing"
 )
 
 var provider *TencentDNSClient
 
+func TestMain(m *testing.M) {
+	if os.Getenv("DOMAINSprite_TENCENT_SECRET_ID") == "" || os.Getenv("DOMAINSprite_TENCENT_SECRET_KEY") == "" {
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
 func Init() {
-	provider, _ = NewTencentProvider("2222222222222222", "333333333333333")
+	id, secret := os.Getenv("DOMAINSprite_TENCENT_SECRET_ID"), os.Getenv("DOMAINSprite_TENCENT_SECRET_KEY")
+	if id == "" || secret == "" {
+		return
+	}
+	provider, _ = NewTencentProvider(models.Account{Name: "integration", Type: "Tencent"}, id, secret)
 }
 
 func TestTencentDNSClient_GetDomainList(t *testing.T) {
 	Init()
+	if provider == nil {
+		t.Skip("Tencent integration credentials not configured")
+	}
 	info := models.DomainsSearch{
 		PageNumber: 1,
 		PageSize:   10,

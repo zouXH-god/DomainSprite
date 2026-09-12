@@ -11,14 +11,15 @@ import (
 	dnspod "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod/v20210323"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type TencentDNSClient struct {
-	client *dnspod.Client
-	info   models.Account
+	client  *dnspod.Client
+	info    models.Account
+	mu      sync.RWMutex
+	records map[string]models.RecordInfo
 }
-
-var RecordListData = map[string]models.RecordInfo{}
 
 const DNSFromTag = "Tencent"
 
@@ -36,8 +37,9 @@ func NewTencentProvider(info models.Account, secretId, secretKey string) (*Tence
 		return nil, err
 	}
 	return &TencentDNSClient{
-		client: client,
-		info:   info,
+		client:  client,
+		info:    info,
+		records: map[string]models.RecordInfo{},
 	}, nil
 }
 
@@ -108,7 +110,9 @@ func (c *TencentDNSClient) GetRecordList(info models.DNSSearch) (models.RecordIn
 			Ttl:           int64(tea.Uint64Value(record.TTL)),
 			DnsFrom:       DNSFromTag,
 		}
-		RecordListData[strconv.FormatUint(*record.RecordId, 10)] = RecordInfo
+		c.mu.Lock()
+		c.records[strconv.FormatUint(*record.RecordId, 10)] = RecordInfo
+		c.mu.Unlock()
 		RecordList.Records = append(RecordList.Records, RecordInfo)
 	}
 	RecordList.TotalCount = int64(tea.Uint64Value(response.Response.RecordCountInfo.TotalCount))
@@ -122,10 +126,13 @@ func (c *TencentDNSClient) AddRecord(info models.RecordInfo) (models.RecordInfo,
 	request := dnspod.NewCreateRecordRequest()
 	info.ToTencent()
 	utils.SetRequestFieldsWithTag(&info, request, DNSFromTag)
-	_, err := c.client.CreateRecord(request)
+	response, err := c.client.CreateRecord(request)
 	if err != nil {
 		fmt.Println(err)
 		return models.RecordInfo{}, err
+	}
+	if response.Response != nil && response.Response.RecordId != nil {
+		info.Id = strconv.FormatUint(*response.Response.RecordId, 10)
 	}
 	return info, nil
 }
@@ -140,6 +147,9 @@ func (c *TencentDNSClient) UpdateRecord(info models.RecordInfo) (models.RecordIn
 		fmt.Println(err)
 		return models.RecordInfo{}, err
 	}
+	c.mu.Lock()
+	delete(c.records, info.Id)
+	c.mu.Unlock()
 	return info, nil
 }
 
@@ -157,6 +167,9 @@ func (c *TencentDNSClient) DeleteRecord(DomainName string, RecordIdStr string) (
 		fmt.Println(err)
 		return models.RecordInfo{}, err
 	}
+	c.mu.Lock()
+	delete(c.records, RecordIdStr)
+	c.mu.Unlock()
 	return models.RecordInfo{
 		Id: RecordIdStr,
 	}, nil
@@ -186,7 +199,9 @@ func (c *TencentDNSClient) SetRecordStatus(DomainName string, RecordIdStr string
 // GetRecordInfo 获取记录信息
 func (c *TencentDNSClient) GetRecordInfo(DomainName string, RecordIdStr string) (models.RecordInfo, error) {
 	// 先获取缓存，如果有就直接返回
-	RecordInfo := RecordListData[RecordIdStr]
+	c.mu.RLock()
+	RecordInfo := c.records[RecordIdStr]
+	c.mu.RUnlock()
 	if RecordInfo.Id != "" {
 		return RecordInfo, nil
 	}
@@ -225,6 +240,8 @@ func (c *TencentDNSClient) GetRecordInfo(DomainName string, RecordIdStr string) 
 		DnsFrom:       DNSFromTag,
 	}
 	// 缓存记录
-	RecordListData[RecordIdStr] = RecordInfo
+	c.mu.Lock()
+	c.records[RecordIdStr] = RecordInfo
+	c.mu.Unlock()
 	return RecordInfo, nil
 }
