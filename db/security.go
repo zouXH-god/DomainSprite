@@ -72,9 +72,16 @@ func DecryptSecret(value string) (string, error) {
 	if !strings.HasPrefix(value, "v1:") {
 		return "", errors.New("未知密文版本")
 	}
-	data, err := base64.RawStdEncoding.DecodeString(strings.TrimPrefix(value, "v1:"))
+	encoded := strings.TrimPrefix(value, "v1:")
+	data, err := base64.RawStdEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", fmt.Errorf("解码密文: %w", err)
+	}
+	// DecodeString accepts alternate values in unused trailing Base64 bits.
+	// Requiring the canonical representation makes any textual mutation fail,
+	// even when it would otherwise decode to the same authenticated bytes.
+	if base64.RawStdEncoding.EncodeToString(data) != encoded {
+		return "", errors.New("密文编码不规范")
 	}
 	masterKey.RLock()
 	key := append([]byte(nil), masterKey.value...)

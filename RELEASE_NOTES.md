@@ -1,6 +1,8 @@
-# DomainSprite v1.3.0
+# DomainSprite v1.3.1
 
 本次版本将 DomainSprite 从单一 DNS/证书工具升级为具备 Web 控制台、多用户权限、可恢复证书生命周期和独立签发节点的管理平台。升级前请备份 `database.db`、`config.toml`、`certificateData` 和快速 DDNS 数据目录。
+
+该补丁版本修复 AES-GCM 密文认证测试中由 Raw Base64 尾部未使用位造成的随机失败，并拒绝非规范密文编码。功能内容包含 v1.3.0 的全部更新。
 
 ## 管理控制台
 

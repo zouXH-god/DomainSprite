@@ -27,12 +27,14 @@ func TestSecretEncryptionAuthenticated(t *testing.T) {
 	if err != nil || plain != "cloud-secret" {
 		t.Fatalf("roundtrip=%q err=%v", plain, err)
 	}
-	last := encrypted[len(encrypted)-1]
-	replacement := byte('A')
-	if last == 'A' {
-		replacement = 'B'
+	encoded := strings.TrimPrefix(encrypted, "v1:")
+	ciphertext, err := base64.RawStdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err = DecryptSecret(encrypted[:len(encrypted)-1] + string(replacement)); err == nil {
+	ciphertext[len(ciphertext)-1] ^= 1
+	tampered := "v1:" + base64.RawStdEncoding.EncodeToString(ciphertext)
+	if _, err = DecryptSecret(tampered); err == nil {
 		t.Fatal("tampered ciphertext accepted")
 	}
 }
