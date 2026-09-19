@@ -492,6 +492,16 @@ func SaveSettings(c *gin.Context) {
 			values["apply_domain_name"] = fqdn
 		}
 	}
+	if group == "fast" {
+		if salt, ok := values["access_salt"]; ok {
+			normalized := strings.TrimSpace(fmt.Sprint(salt))
+			if len(normalized) < 16 {
+				requestModel.BadRequest(c, "AccessSalt 至少需要 16 个字符")
+				return
+			}
+			values["access_salt"] = normalized
+		}
+	}
 	err := db.DB.Transaction(func(tx *gorm.DB) error {
 		for key, value := range values {
 			full := group + "." + key

@@ -8,7 +8,7 @@ type ModalType = "key" | "user" | "account" | "profile" | "scope" | "grant" | ""
 const session = useSessionStore();
 const keys=ref<any[]>([]),users=ref<any[]>([]),accounts=ref<any[]>([]),profiles=ref<any[]>([]),scopes=ref<any[]>([]),grants=ref<any[]>([]);
 const error=ref(""),notice=ref(""),modal=ref<ModalType>(""),editingId=ref(0),saving=ref(false),revealed=ref<any>();
-const registrationOpen=ref(false),delegationDomains=ref<any[]>([]),scopeDomains=ref<any[]>([]),scopeDomainsLoading=ref(false);
+const registrationOpen=ref(false),delegationDomains=ref<any[]>([]),scopeDomains=ref<any[]>([]),scopeDomainsLoading=ref(false),fastSalt=ref(""),fastSaltConfigured=ref(false),savingFastSalt=ref(false);
 const scopeNodePrefix=ref("");
 const keyForm=ref({name:"",scopes:["dns:read"]}),userForm=ref({username:"",password:"",role:"user",enabled:true});
 const accountForm=ref({name:"",providerType:"Ali",accessKeyId:"",secret:"",enabled:true});
@@ -31,6 +31,8 @@ async function load(){try{
     const settings=await api<any[]>("/api/settings/certificate"),value=(key:string)=>settings.find(v=>v.key===`certificate.${key}`)?.value||"";
     delegationForm.value={apply_account:value("apply_account"),apply_domain_id:value("apply_domain_id"),apply_domain_name:value("apply_domain_name"),apply_prefix:value("apply_prefix")};
     if(delegationForm.value.apply_account)await loadDelegationDomains(false);
+    const fastSettings=await api<any[]>("/api/settings/fast-ddns");
+    fastSaltConfigured.value=fastSettings.some(v=>v.key==="fast.access_salt");
   }
 }catch(e){fail(e)}}
 async function open(type:ModalType,row?:any){modal.value=type;editingId.value=row?.id||0;revealed.value=undefined;
@@ -92,6 +94,15 @@ function updateScopeFQDN(){
   scopeForm.value.fqdn=prefix?`${prefix}.${scopeForm.value.zoneName}`:scopeForm.value.zoneName;
 }
 async function saveDelegation(){try{await api("/api/settings/certificate",{method:"PUT",body:JSON.stringify(delegationForm.value)});success("委托配置已保存")}catch(e){fail(e)}}
+function generateFastSalt(){
+  const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);
+  fastSalt.value=btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+async function saveFastSalt(){
+  if(fastSalt.value.length<16){error.value="AccessSalt 至少需要 16 个字符";return}
+  savingFastSalt.value=true;
+  try{await api("/api/settings/fast-ddns",{method:"PUT",body:JSON.stringify({access_salt:fastSalt.value})});fastSalt.value="";fastSaltConfigured.value=true;success("快速 DDNS AccessSalt 已更新")}catch(e){fail(e)}finally{savingFastSalt.value=false}
+}
 async function copySecret(){if(revealed.value?.secret)await navigator.clipboard.writeText(revealed.value.secret)}
 onMounted(load);
 </script>
@@ -107,6 +118,7 @@ onMounted(load);
     <section class="card settings-list"><div class="settings-head"><div><h3><UserRoundCheck/>域名授权</h3><p class="muted">用户对权限节点的访问级别。</p></div><button class="primary" @click="open('grant')"><Plus/>授权</button></div><div v-if="!grants.length" class="empty compact">暂无域名授权</div><div v-for="g in grants" :key="g.id" class="setting-row"><span><b>{{userName(g.userId)}} → <span class="mono">{{scopeName(g.scopeId)}}</span></b><small>{{permissionLabel(g.level)}}</small></span><span class="row-actions"><button class="icon-button" title="编辑" @click="open('grant',g)"><Pencil/></button><button class="icon-button danger" title="撤销" @click="remove(`/api/domain-grants/${g.id}`,'确定撤销此域名授权？')"><Trash2/></button></span></div></section>
     <section class="card"><div class="settings-head"><div><h3>注册策略</h3><p class="muted">默认关闭公开注册。</p></div><button class="primary" @click="saveRegistration">保存</button></div><label class="remember-row"><input v-model="registrationOpen" type="checkbox"><span>允许公开注册普通用户</span></label></section>
     <section class="card"><div class="settings-head"><div><h3>CNAME 委托承载域名</h3><p class="muted">外部证书的 DNS-01 TXT 承载位置。</p></div><button class="primary" @click="saveDelegation">保存</button></div><div class="form-grid"><select v-model="delegationForm.apply_account" @change="loadDelegationDomains(true)"><option value="">选择 DNS 账号</option><option v-for="a in accounts" :value="a.name">{{a.name}} · {{a.providerType}}</option></select><select v-model="delegationForm.apply_domain_id" @change="selectDelegationDomain"><option value="">选择承载域名</option><option v-for="d in delegationDomains" :value="d.id">{{d.domainName}}</option></select><input v-model="delegationForm.apply_prefix" placeholder="可选前缀，如 acme"></div><p v-if="delegationForm.apply_domain_name" class="mono muted">{{delegationForm.apply_prefix?delegationForm.apply_prefix+'.':''}}&lt;哈希&gt;.{{delegationForm.apply_domain_name}}.</p></section>
+    <section class="card"><div class="settings-head"><div><h3><KeyRound/>快速 DDNS AccessSalt</h3><p class="muted">用于保护快速 DDNS 创建接口，不会从服务器回显。</p></div><span class="badge">{{fastSaltConfigured?'已配置':'未配置'}}</span></div><label>新 AccessSalt<input v-model="fastSalt" type="password" minlength="16" autocomplete="new-password" :placeholder="fastSaltConfigured?'留空保持当前值':'至少 16 个字符'"></label><p class="muted compact-note">更新后旧 AccessSalt 立即失效。建议使用随机生成值，并通过安全渠道保存。</p><div class="row-actions settings-save-actions"><button class="secondary" type="button" @click="generateFastSalt">生成随机值</button><button class="primary" type="button" :disabled="savingFastSalt||fastSalt.length<16" @click="saveFastSalt">{{savingFastSalt?'保存中…':'更新 AccessSalt'}}</button></div></section>
   </template>
 
   <div v-if="modal" class="modal-backdrop" @click.self="modal=''" ><section class="modal-card"><div class="drawer-head"><div><p class="eyebrow">SETTINGS</p><h2>{{modalTitle}}</h2></div><button class="icon-button" @click="modal='' "><X/></button></div>

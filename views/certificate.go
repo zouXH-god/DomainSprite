@@ -349,9 +349,63 @@ func DownloadCertificateViewWithId(c *gin.Context) {
 			requestModel.BadRequest(c, "证书压缩失败："+err.Error())
 			return
 		}
-		c.File(zipPath)
+		c.FileAttachment(zipPath, certificateArchiveName(certificateDB.DomainList))
 	}
 	return
+}
+
+// certificateArchiveName builds a readable, cross-platform safe attachment
+// name from the certificate SAN list without exposing the internal save path.
+func certificateArchiveName(domainList string) string {
+	const maxBaseLength = 180
+	seen := make(map[string]struct{})
+	domains := make([]string, 0)
+	for _, raw := range strings.Split(domainList, ",") {
+		domain := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+		if domain == "" {
+			continue
+		}
+		if strings.HasPrefix(domain, "*.") {
+			domain = "wildcard." + strings.TrimPrefix(domain, "*.")
+		}
+		domain = strings.Map(func(r rune) rune {
+			if r < 32 || strings.ContainsRune(`<>:"/\|?*`, r) {
+				return '_'
+			}
+			return r
+		}, domain)
+		if _, exists := seen[domain]; exists {
+			continue
+		}
+		seen[domain] = struct{}{}
+		domains = append(domains, domain)
+	}
+	if len(domains) == 0 {
+		return "certificate.zip"
+	}
+	parts := make([]string, 0, len(domains))
+	length := 0
+	for i, domain := range domains {
+		extra := len(domain)
+		if len(parts) > 0 {
+			extra++
+		}
+		remaining := len(domains) - i
+		reserve := 0
+		if remaining > 1 {
+			reserve = len(fmt.Sprintf("_and-%d-more", remaining))
+		}
+		if length+extra+reserve > maxBaseLength {
+			break
+		}
+		parts = append(parts, domain)
+		length += extra
+	}
+	base := strings.Join(parts, "_")
+	if len(parts) < len(domains) {
+		base += fmt.Sprintf("_and-%d-more", len(domains)-len(parts))
+	}
+	return base + ".zip"
 }
 
 func CertificateContent(c *gin.Context) {

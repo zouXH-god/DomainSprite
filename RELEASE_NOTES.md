@@ -1,8 +1,15 @@
-# DomainSprite v1.3.1
+# DomainSprite v1.3.2
 
 本次版本将 DomainSprite 从单一 DNS/证书工具升级为具备 Web 控制台、多用户权限、可恢复证书生命周期和独立签发节点的管理平台。升级前请备份 `database.db`、`config.toml`、`certificateData` 和快速 DDNS 数据目录。
 
-该补丁版本修复 AES-GCM 密文认证测试中由 Raw Base64 尾部未使用位造成的随机失败，并拒绝非规范密文编码。功能内容包含 v1.3.0 的全部更新。
+该补丁版本增加快速 DDNS AccessSalt 的前端安全配置入口，并将证书完整包下载名称改为根据 SAN 域名列表生成。功能内容包含 v1.3.0 和 v1.3.1 的全部更新。
+
+## v1.3.2 更新
+
+- 管理员可在设置页查看快速 DDNS AccessSalt 是否已配置，手工更新或生成 256-bit 随机值。
+- AccessSalt 不会从服务器回显，输入框留空不会覆盖现有配置，更新值至少需要 16 个字符。
+- 证书完整包采用域名列表命名，例如 `example.com_wildcard.example.com.zip`。
+- ZIP 下载名会自动清理非法字符、规范化通配符、移除重复域名，并安全缩短过长 SAN 列表。
 
 ## 管理控制台
 

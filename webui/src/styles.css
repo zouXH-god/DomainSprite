@@ -471,6 +471,9 @@ code {
   color: var(--muted);
   font-weight: 400;
 }
+.settings-save-actions {
+  margin-top: 12px;
+}
 .field,
 label {
   display: grid;
