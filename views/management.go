@@ -584,6 +584,12 @@ func SaveSettings(c *gin.Context) {
 		requestModel.Error(c, 500, "刷新运行配置失败", nil)
 		return
 	}
+	if group == "fast" {
+		if err = InitFastStore(); err != nil {
+			requestModel.Error(c, 500, "设置已保存，但旧快速解析数据迁移失败: "+err.Error(), nil)
+			return
+		}
+	}
 	if group == "certificate" {
 		if err = certificate.ReloadTaskProcessor(); err != nil {
 			requestModel.Error(c, 503, "设置已保存，但 worker 重载失败", nil)

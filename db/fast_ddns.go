@@ -17,6 +17,7 @@ import (
 )
 
 var fastConfig atomic.Value
+var ErrFastMigrationNeedsConfig = errors.New("迁移快速解析前必须配置 DNS 账号")
 
 func StoreFastConfig(config models.FastConfig) { fastConfig.Store(config) }
 
@@ -47,7 +48,10 @@ func MigrateLegacyFastData(path, accountName string) (int, error) {
 		return 0, fmt.Errorf("解析快速解析 JSON %s: %w", path, err)
 	}
 	if strings.TrimSpace(accountName) == "" && len(legacy.DataList) > 0 {
-		return 0, errors.New("迁移快速解析前必须配置 DNS 账号")
+		accountName, err = inferLegacyFastAccount(legacy)
+		if err != nil {
+			return 0, err
+		}
 	}
 	bak := path + ".bak"
 	if _, statErr := os.Stat(bak); statErr == nil {
@@ -94,4 +98,38 @@ func MigrateLegacyFastData(path, accountName string) (int, error) {
 		_ = dir.Close()
 	}
 	return inserted, nil
+}
+
+func inferLegacyFastAccount(legacy models.FastDataJson) (string, error) {
+	candidates := map[string]struct{}{}
+	for _, item := range legacy.DataList {
+		var names []string
+		query := DB.Model(&models.Domains{}).Distinct("account_name").Where("id = ?", item.RecordInfo.DomainId)
+		if item.RecordInfo.DomainName != "" {
+			query = query.Where("lower(domain_name) = ?", strings.ToLower(strings.TrimSuffix(item.RecordInfo.DomainName, ".")))
+		}
+		if err := query.Pluck("account_name", &names).Error; err != nil {
+			return "", err
+		}
+		for _, name := range names {
+			if name != "" {
+				candidates[name] = struct{}{}
+			}
+		}
+	}
+	if len(candidates) == 1 {
+		for name := range candidates {
+			return name, nil
+		}
+	}
+	if len(candidates) == 0 {
+		var accounts []models.DNSAccount
+		if err := DB.Where("enabled = ?", true).Limit(2).Find(&accounts).Error; err != nil {
+			return "", err
+		}
+		if len(accounts) == 1 {
+			return accounts[0].Name, nil
+		}
+	}
+	return "", ErrFastMigrationNeedsConfig
 }

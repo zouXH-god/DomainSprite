@@ -24,6 +24,10 @@ func InitFastStore() error {
 	config := db.CurrentFastConfig()
 	count, err := db.MigrateLegacyFastData(filepath.Join(config.DataPath, "fastData.json"), config.UseAccount)
 	if err != nil {
+		if errors.Is(err, db.ErrFastMigrationNeedsConfig) {
+			slog.Warn("检测到旧快速解析 JSON，但无法唯一确定 DNS 账号；请在管理后台配置快速解析后重试迁移")
+			return nil
+		}
 		return err
 	}
 	if count > 0 {

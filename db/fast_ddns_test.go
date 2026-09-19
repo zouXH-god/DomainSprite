@@ -3,6 +3,7 @@ package db
 import (
 	"DDNSServer/models"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +25,7 @@ func TestMigrateLegacyFastData(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err = DB.AutoMigrate(&models.FastDDNSRecord{}, &models.SystemSetting{}); err != nil {
+	if err = DB.AutoMigrate(&models.FastDDNSRecord{}, &models.SystemSetting{}, &models.Domains{}, &models.DNSAccount{}); err != nil {
 		t.Fatal(err)
 	}
 	if err = InitMasterKeyValue("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"); err != nil {
@@ -37,6 +38,15 @@ func TestMigrateLegacyFastData(t *testing.T) {
 		Id: "provider-1", DomainId: "zone-1", DomainName: "example.com", RecordName: "host00011",
 		RecordType: "A", RecordContent: "192.0.2.10", Ttl: 600,
 	}}}}
+	if _, err = inferLegacyFastAccount(legacy); !errors.Is(err, ErrFastMigrationNeedsConfig) {
+		t.Fatalf("missing account must defer migration, got %v", err)
+	}
+	if err = DB.Create(&models.Domains{Id: "zone-1", DomainName: "example.com", DnsFrom: "Ali", AccountName: "account-a"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if account, inferErr := inferLegacyFastAccount(legacy); inferErr != nil || account != "account-a" {
+		t.Fatalf("inferred account = %q, %v", account, inferErr)
+	}
 	b, _ := json.Marshal(legacy)
 	if err = os.WriteFile(path, b, 0600); err != nil {
 		t.Fatal(err)

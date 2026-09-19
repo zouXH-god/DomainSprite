@@ -49,8 +49,14 @@ func ListRuntimeAccounts() ([]models.Account, error) {
 
 func setting(key string) (string, error) {
 	var s models.SystemSetting
-	err := DB.First(&s, "key = ?", key).Error
-	return s.Value, err
+	result := DB.Where("key = ?", key).Limit(1).Find(&s)
+	if result.Error != nil {
+		return "", result.Error
+	}
+	if result.RowsAffected == 0 {
+		return "", gorm.ErrRecordNotFound
+	}
+	return s.Value, nil
 }
 func settingInt(key string, current int) int {
 	value, err := setting(key)
