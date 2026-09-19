@@ -313,8 +313,11 @@ func SaveDNSAccount(c *gin.Context) {
 func DeleteDNSAccount(c *gin.Context) {
 	var count int64
 	db.DB.Model(&models.Domains{}).Where("dns_account_id = ? OR account_name = (SELECT name FROM dns_accounts WHERE id = ?)", c.Param("id"), c.Param("id")).Count(&count)
+	if count == 0 {
+		db.DB.Model(&models.FastDDNSRecord{}).Where("dns_account_name = (SELECT name FROM dns_accounts WHERE id = ?)", c.Param("id")).Count(&count)
+	}
 	if count > 0 {
-		requestModel.Error(c, 409, "账号仍被域名引用，请先停用或迁移域名", nil)
+		requestModel.Error(c, 409, "账号仍被域名或快速解析记录引用，请先迁移相关数据", nil)
 		return
 	}
 	if err := db.DB.Delete(&models.DNSAccount{}, c.Param("id")).Error; err != nil {
@@ -501,6 +504,46 @@ func SaveSettings(c *gin.Context) {
 			}
 			values["access_salt"] = normalized
 		}
+		allowed := map[string]bool{"access_salt": true, "use_account": true, "domain_id": true, "domain_name": true, "name_strata": true, "id_length": true, "start_id": true}
+		for key := range values {
+			if !allowed[key] {
+				requestModel.BadRequest(c, "未知的快速解析配置项: "+key)
+				return
+			}
+		}
+		hasFastConfig := false
+		for _, key := range []string{"use_account", "domain_id", "domain_name", "name_strata", "id_length", "start_id"} {
+			if _, ok := values[key]; ok {
+				hasFastConfig = true
+			}
+		}
+		if hasFastConfig {
+			accountName := strings.TrimSpace(fmt.Sprint(values["use_account"]))
+			domainID := strings.TrimSpace(fmt.Sprint(values["domain_id"]))
+			domainName, domainErr := normalizeFQDN(fmt.Sprint(values["domain_name"]))
+			if accountName == "" || domainID == "" || domainErr != nil {
+				requestModel.BadRequest(c, "快速解析 DNS 账号、DomainId 和承载域名必须完整且有效")
+				return
+			}
+			var count int64
+			if err := db.DB.Model(&models.DNSAccount{}).Where("name = ? AND enabled = ?", accountName, true).Count(&count).Error; err != nil || count != 1 {
+				requestModel.BadRequest(c, "快速解析 DNS 账号不存在或已停用")
+				return
+			}
+			prefix := strings.TrimSpace(fmt.Sprint(values["name_strata"]))
+			if prefix == "" || !validFastRecordName(prefix) || strings.Contains(prefix, ".") {
+				requestModel.BadRequest(c, "快速解析记录前缀格式不正确")
+				return
+			}
+			idLength, idErr := strconv.Atoi(fmt.Sprint(values["id_length"]))
+			startID, startErr := strconv.Atoi(fmt.Sprint(values["start_id"]))
+			if idErr != nil || idLength < 1 || idLength > 12 || startErr != nil || startID < 0 {
+				requestModel.BadRequest(c, "编号长度必须为 1-12，起始编号不能为负数")
+				return
+			}
+			values["use_account"], values["domain_id"], values["domain_name"] = accountName, domainID, domainName
+			values["name_strata"], values["id_length"], values["start_id"] = prefix, idLength, startID
+		}
 	}
 	err := db.DB.Transaction(func(tx *gorm.DB) error {
 		for key, value := range values {
@@ -516,6 +559,19 @@ func SaveSettings(c *gin.Context) {
 			}
 			if e := tx.Where(models.SystemSetting{Key: full}).Assign(models.SystemSetting{Value: raw, Sensitive: sensitive}).FirstOrCreate(&models.SystemSetting{}).Error; e != nil {
 				return e
+			}
+		}
+		if group == "fast" {
+			if start, ok := values["start_id"]; ok {
+				var recordCount int64
+				if e := tx.Model(&models.FastDDNSRecord{}).Count(&recordCount).Error; e != nil {
+					return e
+				}
+				if recordCount == 0 {
+					if e := tx.Where(models.SystemSetting{Key: "fast.next_id"}).Assign(models.SystemSetting{Value: fmt.Sprint(start)}).FirstOrCreate(&models.SystemSetting{}).Error; e != nil {
+						return e
+					}
+				}
 			}
 		}
 		return nil

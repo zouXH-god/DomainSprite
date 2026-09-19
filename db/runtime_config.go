@@ -121,6 +121,7 @@ func LoadRuntimeConfig() error {
 		}
 		models.AccountConfig.FastConfig.AccessSalt = plain
 	}
+	StoreFastConfig(models.AccountConfig.FastConfig)
 	return nil
 }
 

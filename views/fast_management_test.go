@@ -14,7 +14,7 @@ func TestFastRecordViewDoesNotExposeToken(t *testing.T) {
 	payload := models.FastData{Token: "should-never-leak", RecordInfo: models.RecordInfo{
 		Id: "record-1", DomainName: "example.com", RecordName: "host", RecordContent: "192.0.2.1", RecordType: "A",
 	}}
-	b, err := json.Marshal(toFastRecordView(payload.RecordInfo))
+	b, err := json.Marshal(toFastRecordView(fastRecordRow("test", payload.RecordInfo, "hash", "encrypted")))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,9 @@
 package views
 
 import (
+	"DDNSServer/db"
 	"DDNSServer/models"
 	"DDNSServer/models/requestModel"
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,19 +11,24 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-var fastStore *models.FastStore
+var fastOperationMu sync.Mutex
 
 func InitFastStore() error {
-	s, err := models.NewFastStore(filepath.Join(models.AccountConfig.FastConfig.DataPath, "fastData.json"), models.AccountConfig.FastConfig.StartId)
+	config := db.CurrentFastConfig()
+	count, err := db.MigrateLegacyFastData(filepath.Join(config.DataPath, "fastData.json"), config.UseAccount)
 	if err != nil {
 		return err
 	}
-	fastStore = s
+	if count > 0 {
+		slog.Info("快速解析 JSON 已迁移到数据库", "records", count)
+	}
 	return nil
 }
 func deprecatedFast(c *gin.Context) {
@@ -35,63 +40,99 @@ func deprecatedFast(c *gin.Context) {
 }
 
 func IpToDomainRecord(c *gin.Context) {
-	if fastStore == nil {
-		requestModel.Error(c, 500, "快速 DDNS 未初始化", nil)
-		return
-	}
 	host := c.RemoteIP()
-	if d, ok := fastStore.FindIP(host); ok {
-		requestModel.Success(c, d)
+	fastOperationMu.Lock()
+	defer fastOperationMu.Unlock()
+	var existing models.FastDDNSRecord
+	if err := db.DB.Where("record_content = ?", host).First(&existing).Error; err == nil {
+		token, decryptErr := db.DecryptSecret(existing.TokenEncrypted)
+		if decryptErr != nil {
+			requestModel.Error(c, 500, "读取快速解析凭证失败", nil)
+			return
+		}
+		requestModel.Success(c, models.FastData{Token: token, RecordInfo: fastRowRecord(existing)})
+		return
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		requestModel.Error(c, 500, "查询快速解析记录失败", nil)
 		return
 	}
-	provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
+	config := db.CurrentFastConfig()
+	if config.UseAccount == "" || config.DomainId == "" || config.DomainName == "" {
+		requestModel.Error(c, 503, "快速解析尚未配置 DNS 账号和承载域名", nil)
+		return
+	}
+	provider, err := getProviderForAccountName(config.UseAccount)
 	if err != nil {
 		requestModel.BadRequest(c, err.Error())
 		return
 	}
-	var result models.FastData
-	err = fastStore.WithWrite(func(data *models.FastDataJson) error {
-		for _, d := range data.DataList {
-			if d.RecordInfo.RecordContent == host {
-				result = d
-				return nil
-			}
+	nextID := config.StartId
+	var sequence models.SystemSetting
+	if err := db.DB.First(&sequence, "key = ?", "fast.next_id").Error; err == nil {
+		if parsed, parseErr := strconv.Atoi(sequence.Value); parseErr == nil {
+			nextID = parsed
 		}
-		var name string
-		for {
-			name = fmt.Sprintf("%s%0*d", models.AccountConfig.FastConfig.NameStrata, models.AccountConfig.FastConfig.IdLength, data.LastId)
-			list, e := provider.GetRecordList(models.DNSSearch{DomainId: models.AccountConfig.FastConfig.DomainId, DomainName: models.AccountConfig.FastConfig.DomainName, KeyWord: name})
-			if e != nil {
-				return e
-			}
-			data.LastId++
-			if len(list.Records) == 0 {
-				break
-			}
+	}
+	var name string
+	for {
+		name = fmt.Sprintf("%s%0*d", config.NameStrata, config.IdLength, nextID)
+		list, listErr := provider.GetRecordList(models.DNSSearch{DomainId: config.DomainId, DomainName: config.DomainName, KeyWord: name})
+		if listErr != nil {
+			requestModel.Error(c, 502, listErr.Error(), nil)
+			return
 		}
-		record, e := provider.AddRecord(models.RecordInfo{DomainId: models.AccountConfig.FastConfig.DomainId, DomainName: models.AccountConfig.FastConfig.DomainName, RecordName: name, RecordType: "A", RecordContent: host})
-		if e != nil {
-			return e
+		nextID++
+		if len(list.Records) == 0 {
+			break
 		}
-		token, e := models.NewFastToken()
-		if e != nil {
-			_, _ = provider.DeleteRecord(record.DomainName, record.Id)
-			return e
-		}
-		result = models.FastData{RecordInfo: record, Token: token}
-		data.DataList = append(data.DataList, result)
-		return nil
-	})
+	}
+	record, err := provider.AddRecord(models.RecordInfo{DomainId: config.DomainId, DomainName: config.DomainName, RecordName: name, RecordType: "A", RecordContent: host})
 	if err != nil {
-		if result.RecordInfo.Id != "" {
-			if _, cleanupErr := provider.DeleteRecord(result.RecordInfo.DomainName, result.RecordInfo.Id); cleanupErr != nil {
-				slog.Error("快速 DDNS 本地保存失败且云端补偿失败", "error", cleanupErr)
-			}
-		}
 		requestModel.Error(c, 502, err.Error(), nil)
 		return
 	}
-	requestModel.Success(c, result)
+	if record.DomainId == "" {
+		record.DomainId = config.DomainId
+	}
+	if record.DomainName == "" {
+		record.DomainName = config.DomainName
+	}
+	if record.RecordName == "" {
+		record.RecordName = name
+	}
+	if record.RecordType == "" {
+		record.RecordType = "A"
+	}
+	if record.RecordContent == "" {
+		record.RecordContent = host
+	}
+	token, err := models.NewFastToken()
+	if err != nil {
+		_, _ = provider.DeleteRecord(record.DomainName, record.Id)
+		requestModel.Error(c, 500, "生成快速解析凭证失败", nil)
+		return
+	}
+	encrypted, err := db.EncryptSecret(token)
+	if err != nil {
+		_, _ = provider.DeleteRecord(record.DomainName, record.Id)
+		requestModel.Error(c, 500, "加密快速解析凭证失败", nil)
+		return
+	}
+	row := fastRecordRow(config.UseAccount, record, db.FastTokenHash(token), encrypted)
+	err = db.DB.Transaction(func(tx *gorm.DB) error {
+		if createErr := tx.Create(&row).Error; createErr != nil {
+			return createErr
+		}
+		return tx.Where(models.SystemSetting{Key: "fast.next_id"}).Assign(models.SystemSetting{Value: strconv.Itoa(nextID)}).FirstOrCreate(&models.SystemSetting{}).Error
+	})
+	if err != nil {
+		if _, cleanupErr := provider.DeleteRecord(record.DomainName, record.Id); cleanupErr != nil {
+			slog.Error("快速 DDNS 数据库保存失败且云端补偿失败", "record_id", record.Id, "error", cleanupErr)
+		}
+		requestModel.Error(c, 500, "保存快速解析记录失败", nil)
+		return
+	}
+	requestModel.Success(c, models.FastData{RecordInfo: record, Token: token})
 }
 
 type fastUpdateRequest struct {
@@ -99,81 +140,75 @@ type fastUpdateRequest struct {
 }
 
 func UpdateForToken(c *gin.Context) {
-	if fastStore == nil {
-		requestModel.Error(c, 500, "快速 DDNS 未初始化", nil)
-		return
-	}
 	var req fastUpdateRequest
 	if err := c.ShouldBind(&req); err != nil {
 		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	host := c.RemoteIP()
-	provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
-	if err != nil {
-		requestModel.BadRequest(c, err.Error())
+	fastOperationMu.Lock()
+	defer fastOperationMu.Unlock()
+	var row models.FastDDNSRecord
+	if err := db.DB.First(&row, "token_hash = ?", db.FastTokenHash(req.Token)).Error; err != nil {
+		requestModel.BadRequest(c, "Token Not Exist")
 		return
 	}
-	var result models.FastData
-	err = fastStore.WithWrite(func(data *models.FastDataJson) error {
-		for i := range data.DataList {
-			d := &data.DataList[i]
-			found, _ := fastStoreTokenEqual(d.Token, req.Token)
-			if found {
-				if d.RecordInfo.RecordContent != host {
-					old := d.RecordInfo.RecordContent
-					d.RecordInfo.RecordContent = host
-					updated, e := provider.UpdateRecord(d.RecordInfo)
-					if e != nil {
-						d.RecordInfo.RecordContent = old
-						return e
-					}
-					d.RecordInfo = updated
-				}
-				result = *d
-				return nil
-			}
+	record := fastRowRecord(row)
+	if record.RecordContent != host {
+		record.RecordContent = host
+		updated, updateErr := updateFastRecordRow(&row, record, 0)
+		if updateErr != nil {
+			requestModel.Error(c, 502, updateErr.Error(), nil)
+			return
 		}
-		return errors.New("Token Not Exist")
-	})
-	if err != nil {
-		requestModel.BadRequest(c, err.Error())
-		return
+		record = updated
 	}
-	requestModel.Success(c, result)
-}
-
-func fastStoreTokenEqual(a, b string) (bool, error) {
-	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1, nil
+	requestModel.Success(c, models.FastData{Token: req.Token, RecordInfo: record})
 }
 
 type fastRecordView struct {
-	ID            string `json:"id"`
-	DomainID      string `json:"domainId"`
-	DomainName    string `json:"domainName"`
-	FQDN          string `json:"fqdn"`
-	RecordName    string `json:"recordName"`
-	RecordType    string `json:"recordType"`
-	RecordContent string `json:"recordContent"`
-	Line          string `json:"line"`
-	Status        string `json:"status"`
-	TTL           int64  `json:"ttl"`
-	DNSFrom       string `json:"dnsFrom"`
-	UpdateTime    string `json:"updateTime,omitempty"`
+	ID               uint   `json:"id"`
+	ProviderRecordID string `json:"providerRecordId"`
+	Revision         uint64 `json:"revision"`
+	DomainID         string `json:"domainId"`
+	DomainName       string `json:"domainName"`
+	FQDN             string `json:"fqdn"`
+	RecordName       string `json:"recordName"`
+	RecordType       string `json:"recordType"`
+	RecordContent    string `json:"recordContent"`
+	Line             string `json:"line"`
+	Status           string `json:"status"`
+	TTL              int64  `json:"ttl"`
+	DNSFrom          string `json:"dnsFrom"`
+	UpdateTime       string `json:"updateTime,omitempty"`
 }
 
-func toFastRecordView(info models.RecordInfo) fastRecordView {
+func toFastRecordView(row models.FastDDNSRecord) fastRecordView {
+	info := fastRowRecord(row)
 	fqdn := strings.TrimSuffix(info.RecordName+"."+info.DomainName, ".")
 	if info.RecordName == "@" || info.RecordName == "" {
 		fqdn = info.DomainName
 	}
-	view := fastRecordView{ID: info.Id, DomainID: info.DomainId, DomainName: info.DomainName, FQDN: fqdn,
+	view := fastRecordView{ID: row.ID, ProviderRecordID: row.ProviderRecordID, Revision: row.Revision, DomainID: info.DomainId, DomainName: info.DomainName, FQDN: fqdn,
 		RecordName: info.RecordName, RecordType: info.RecordType, RecordContent: info.RecordContent,
 		Line: info.Line, Status: info.Status, TTL: info.Ttl, DNSFrom: info.DnsFrom}
 	if !info.UpdateTime.IsZero() {
 		view.UpdateTime = info.UpdateTime.Format(time.RFC3339)
 	}
 	return view
+}
+
+func fastRowRecord(row models.FastDDNSRecord) models.RecordInfo {
+	return models.RecordInfo{Id: row.ProviderRecordID, DomainId: row.ProviderDomainID, DomainName: row.DomainName,
+		RecordName: row.RecordName, RecordType: row.RecordType, RecordContent: row.RecordContent,
+		Line: row.Line, Status: row.Status, Ttl: row.TTL, DnsFrom: row.DNSFrom, CreateTime: row.CreatedAt, UpdateTime: row.UpdatedAt}
+}
+
+func fastRecordRow(account string, info models.RecordInfo, tokenHash, tokenEncrypted string) models.FastDDNSRecord {
+	return models.FastDDNSRecord{DNSAccountName: account, ProviderDomainID: info.DomainId, DomainName: info.DomainName,
+		ProviderRecordID: info.Id, RecordName: info.RecordName, RecordType: info.RecordType, RecordContent: info.RecordContent,
+		Line: info.Line, Status: info.Status, TTL: info.Ttl, DNSFrom: info.DnsFrom, TokenHash: tokenHash,
+		TokenEncrypted: tokenEncrypted, Revision: 1}
 }
 
 func fastPageParams(c *gin.Context) (int, int, error) {
@@ -190,41 +225,39 @@ func fastPageParams(c *gin.Context) (int, int, error) {
 
 // FastRecords returns the managed quick-DDNS records without their update tokens.
 func FastRecords(c *gin.Context) {
-	if fastStore == nil {
-		requestModel.Error(c, 500, "快速 DDNS 未初始化", nil)
-		return
-	}
 	page, pageSize, err := fastPageParams(c)
 	if err != nil {
 		requestModel.BadRequest(c, err.Error())
 		return
 	}
 	keyword := strings.ToLower(strings.TrimSpace(c.Query("search")))
-	snapshot := fastStore.Snapshot()
-	items := make([]fastRecordView, 0, len(snapshot.DataList))
-	for _, item := range snapshot.DataList {
-		view := toFastRecordView(item.RecordInfo)
-		haystack := strings.ToLower(strings.Join([]string{view.FQDN, view.RecordContent, view.RecordType, view.DNSFrom}, " "))
-		if keyword == "" || strings.Contains(haystack, keyword) {
-			items = append(items, view)
-		}
+	query := db.DB.Model(&models.FastDDNSRecord{})
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("lower(record_name || '.' || domain_name) LIKE ? OR lower(record_content) LIKE ? OR lower(dns_account_name) LIKE ?", like, like, like)
 	}
-	total := len(items)
-	start := (page - 1) * pageSize
-	if start > total {
-		start = total
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		requestModel.Error(c, 500, "查询快速解析数量失败", nil)
+		return
 	}
-	end := start + pageSize
-	if end > total {
-		end = total
+	var rows []models.FastDDNSRecord
+	if err := query.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+		requestModel.Error(c, 500, "查询快速解析记录失败", nil)
+		return
 	}
-	requestModel.Success(c, gin.H{"items": items[start:end], "page": page, "pageSize": pageSize, "total": total})
+	items := make([]fastRecordView, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, toFastRecordView(row))
+	}
+	requestModel.Success(c, gin.H{"items": items, "page": page, "pageSize": pageSize, "total": total})
 }
 
 type fastRecordEditRequest struct {
 	RecordName    string `json:"recordName" binding:"required"`
 	RecordContent string `json:"recordContent" binding:"required"`
 	TTL           int64  `json:"ttl" binding:"required"`
+	Revision      uint64 `json:"revision" binding:"required"`
 }
 
 var errFastRecordNotFound = errors.New("快速解析记录不存在")
@@ -246,10 +279,6 @@ func validFastRecordName(name string) bool {
 
 // UpdateFastRecord edits a quick-DDNS record while preserving its private token.
 func UpdateFastRecord(c *gin.Context) {
-	if fastStore == nil {
-		requestModel.Error(c, 500, "快速 DDNS 未初始化", nil)
-		return
-	}
 	var req fastRecordEditRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		requestModel.BadRequest(c, "记录名、IPv4 地址和 TTL 均为必填项")
@@ -269,58 +298,74 @@ func UpdateFastRecord(c *gin.Context) {
 		requestModel.BadRequest(c, "TTL 必须在 1 到 86400 秒之间")
 		return
 	}
-	provider, err := getProviderForAccountName(models.AccountConfig.FastConfig.UseAccount)
+	fastOperationMu.Lock()
+	defer fastOperationMu.Unlock()
+	var row models.FastDDNSRecord
+	err := db.DB.First(&row, c.Param("recordId")).Error
 	if err != nil {
-		requestModel.Error(c, 502, err.Error(), nil)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			requestModel.Error(c, 404, errFastRecordNotFound.Error(), nil)
+		} else {
+			requestModel.Error(c, 500, "查询快速解析记录失败", nil)
+		}
 		return
 	}
-	recordID := c.Param("recordId")
-	var oldRecord, result models.RecordInfo
-	cloudUpdated := false
-	err = fastStore.WithWrite(func(data *models.FastDataJson) error {
-		for i := range data.DataList {
-			item := &data.DataList[i]
-			if item.RecordInfo.Id != recordID {
-				continue
-			}
-			oldRecord = item.RecordInfo
-			candidate := oldRecord
-			candidate.RecordName = req.RecordName
-			candidate.RecordContent = req.RecordContent
-			candidate.Ttl = req.TTL
-			updated, updateErr := provider.UpdateRecord(candidate)
-			if updateErr != nil {
-				return fmt.Errorf("更新 DNS 厂商记录: %w", updateErr)
-			}
-			cloudUpdated = true
-			if updated.Id == "" {
-				updated = candidate
-			}
-			item.RecordInfo = updated
-			result = updated
-			return nil
-		}
-		return errFastRecordNotFound
-	})
+	if row.Revision != req.Revision {
+		requestModel.Error(c, 409, "记录已被其他请求修改，请刷新后重试", nil)
+		return
+	}
+	candidate := fastRowRecord(row)
+	candidate.RecordName, candidate.RecordContent, candidate.Ttl = req.RecordName, req.RecordContent, req.TTL
+	result, err := updateFastRecordRow(&row, candidate, req.Revision)
 	if err != nil {
-		if errors.Is(err, errFastRecordNotFound) {
-			requestModel.Error(c, 404, err.Error(), nil)
-			return
+		if errors.Is(err, errFastRecordConflict) {
+			requestModel.Error(c, 409, err.Error(), nil)
+		} else {
+			requestModel.Error(c, 502, err.Error(), nil)
 		}
-		if cloudUpdated {
-			if _, rollbackErr := provider.UpdateRecord(oldRecord); rollbackErr != nil {
-				slog.Error("快速解析编辑持久化失败且云端回滚失败", "record_id", recordID, "error", rollbackErr)
-			}
-			requestModel.Error(c, 500, "本地保存失败，已尝试回滚云端记录", nil)
-			return
-		}
-		requestModel.Error(c, 502, err.Error(), nil)
 		return
 	}
 	if user, ok := currentUser(c); ok {
-		audit(c, user.ID, "update", "fast-ddns-record:"+recordID, "success")
+		audit(c, user.ID, "update", "fast-ddns-record:"+c.Param("recordId"), "success")
 	}
-	requestModel.Success(c, toFastRecordView(result))
+	row.RecordName, row.RecordContent, row.TTL, row.Revision = result.RecordName, result.RecordContent, result.Ttl, row.Revision+1
+	requestModel.Success(c, toFastRecordView(row))
+}
+
+var errFastRecordConflict = errors.New("记录已被其他请求修改，请刷新后重试")
+
+func updateFastRecordRow(row *models.FastDDNSRecord, candidate models.RecordInfo, expectedRevision uint64) (models.RecordInfo, error) {
+	provider, err := getProviderForAccountName(row.DNSAccountName)
+	if err != nil {
+		return models.RecordInfo{}, err
+	}
+	old := fastRowRecord(*row)
+	updated, err := provider.UpdateRecord(candidate)
+	if err != nil {
+		return models.RecordInfo{}, fmt.Errorf("更新 DNS 厂商记录: %w", err)
+	}
+	if updated.Id == "" {
+		updated = candidate
+	}
+	revision := row.Revision
+	if expectedRevision > 0 {
+		revision = expectedRevision
+	}
+	result := db.DB.Model(&models.FastDDNSRecord{}).Where("id = ? AND revision = ?", row.ID, revision).Updates(map[string]any{
+		"record_name": updated.RecordName, "record_content": updated.RecordContent, "ttl": updated.Ttl,
+		"line": updated.Line, "status": updated.Status, "dns_from": updated.DnsFrom,
+		"revision": gorm.Expr("revision + 1"), "last_error": "",
+	})
+	if result.Error == nil && result.RowsAffected == 1 {
+		return updated, nil
+	}
+	if _, rollbackErr := provider.UpdateRecord(old); rollbackErr != nil {
+		slog.Error("快速解析数据库更新失败且云端回滚失败", "record_id", row.ProviderRecordID, "error", rollbackErr)
+	}
+	if result.Error != nil {
+		return models.RecordInfo{}, fmt.Errorf("保存快速解析记录: %w", result.Error)
+	}
+	return models.RecordInfo{}, errFastRecordConflict
 }
 func LegacyIpToDomainRecord(c *gin.Context) { deprecatedFast(c); IpToDomainRecord(c) }
 func LegacyUpdateForToken(c *gin.Context) {

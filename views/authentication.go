@@ -1,7 +1,7 @@
 package views
 
 import (
-	"DDNSServer/models"
+	"DDNSServer/db"
 	"DDNSServer/models/requestModel"
 	"crypto/subtle"
 	"github.com/gin-gonic/gin"
@@ -15,7 +15,7 @@ func ApiAuthentication(c *gin.Context) {
 
 func FastAuthentication(c *gin.Context) {
 	accessSalt := c.GetHeader("AccessSalt")
-	if accessSalt == "" || !secureEqual(accessSalt, models.AccountConfig.FastConfig.AccessSalt) {
+	if accessSalt == "" || !secureEqual(accessSalt, db.CurrentFastConfig().AccessSalt) {
 		requestModel.Forbidden(c, "AccessSalt is error")
 		c.Abort()
 		return

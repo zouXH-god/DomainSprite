@@ -4,7 +4,9 @@ import { Pencil, RefreshCw, Search, X, Zap } from "@lucide/vue-next";
 import { api, ApiError } from "../api/client";
 
 interface FastRecord {
-  id: string;
+  id: number;
+  providerRecordId: string;
+  revision: number;
   domainId: string;
   domainName: string;
   fqdn: string;
@@ -29,7 +31,7 @@ const page = ref(1), pageSize = 20, total = ref(0);
 const search = ref(""), appliedSearch = ref("");
 const loading = ref(false), saving = ref(false), error = ref(""), notice = ref("");
 const editing = ref<FastRecord>();
-const form = ref({ recordName: "", recordContent: "", ttl: 600 });
+const form = ref({ recordName: "", recordContent: "", ttl: 600, revision: 0 });
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
 function showError(value: unknown) {
@@ -55,7 +57,7 @@ function submitSearch() {
 }
 function open(record: FastRecord) {
   editing.value = record;
-  form.value = { recordName: record.recordName, recordContent: record.recordContent, ttl: record.ttl || 600 };
+  form.value = { recordName: record.recordName, recordContent: record.recordContent, ttl: record.ttl || 600, revision: record.revision };
 }
 async function save() {
   if (!editing.value || saving.value) return;
@@ -104,7 +106,7 @@ onMounted(load);
         <thead><tr><th>域名</th><th>类型</th><th>记录值</th><th>TTL</th><th>线路 / 状态</th><th>厂商</th><th></th></tr></thead>
         <tbody>
           <tr v-for="record in records" :key="record.id">
-            <td><b class="mono">{{ record.fqdn }}</b><br><small class="muted mono">ID {{ record.id }}</small></td>
+            <td><b class="mono">{{ record.fqdn }}</b><br><small class="muted mono">Record ID {{ record.providerRecordId }}</small></td>
             <td><span class="badge">{{ record.recordType || "A" }}</span></td>
             <td class="mono">{{ record.recordContent }}</td>
             <td>{{ record.ttl || "默认" }}</td>

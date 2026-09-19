@@ -8,7 +8,7 @@ type ModalType = "key" | "user" | "account" | "profile" | "scope" | "grant" | ""
 const session = useSessionStore();
 const keys=ref<any[]>([]),users=ref<any[]>([]),accounts=ref<any[]>([]),profiles=ref<any[]>([]),scopes=ref<any[]>([]),grants=ref<any[]>([]);
 const error=ref(""),notice=ref(""),modal=ref<ModalType>(""),editingId=ref(0),saving=ref(false),revealed=ref<any>();
-const registrationOpen=ref(false),delegationDomains=ref<any[]>([]),scopeDomains=ref<any[]>([]),scopeDomainsLoading=ref(false),fastSalt=ref(""),fastSaltConfigured=ref(false),savingFastSalt=ref(false);
+const registrationOpen=ref(false),delegationDomains=ref<any[]>([]),scopeDomains=ref<any[]>([]),scopeDomainsLoading=ref(false),fastSalt=ref(""),fastSaltConfigured=ref(false),savingFastSalt=ref(false),fastDomains=ref<any[]>([]),fastDomainsLoading=ref(false),savingFastConfig=ref(false);
 const scopeNodePrefix=ref("");
 const keyForm=ref({name:"",scopes:["dns:read"]}),userForm=ref({username:"",password:"",role:"user",enabled:true});
 const accountForm=ref({name:"",providerType:"Ali",accessKeyId:"",secret:"",enabled:true});
@@ -16,6 +16,7 @@ const profileForm=ref({name:"",email:"",caDirUrl:"",isDefault:false,enabled:true
 const scopeForm=ref({dnsAccountId:0,providerDomainId:"",zoneName:"",fqdn:"",inheritChildren:true});
 const grantForm=ref({userId:0,scopeId:0,level:"viewer"});
 const delegationForm=ref({apply_account:"",apply_domain_id:"",apply_domain_name:"",apply_prefix:""});
+const fastForm=ref({use_account:"",domain_id:"",domain_name:"",name_strata:"host",id_length:5,start_id:1});
 const isAdmin=computed(()=>session.user?.role==="admin");
 const modalTitle=computed(()=>{if(!modal.value)return "设置";const titles:Record<Exclude<ModalType,"">,string>={key:"创建 AccessKey",user:editingId.value?"编辑用户":"创建用户",account:editingId.value?"编辑 DNS 账号":"创建 DNS 账号",profile:editingId.value?"编辑 ACME Profile":"创建 ACME Profile",scope:editingId.value?"编辑域名节点":"创建域名节点",grant:editingId.value?"编辑域名授权":"创建域名授权"};return titles[modal.value]});
 const userName=(id:number)=>users.value.find(v=>v.id===id)?.username||`用户 #${id}`;
@@ -31,8 +32,10 @@ async function load(){try{
     const settings=await api<any[]>("/api/settings/certificate"),value=(key:string)=>settings.find(v=>v.key===`certificate.${key}`)?.value||"";
     delegationForm.value={apply_account:value("apply_account"),apply_domain_id:value("apply_domain_id"),apply_domain_name:value("apply_domain_name"),apply_prefix:value("apply_prefix")};
     if(delegationForm.value.apply_account)await loadDelegationDomains(false);
-    const fastSettings=await api<any[]>("/api/settings/fast-ddns");
+    const fastSettings=await api<any[]>("/api/settings/fast-ddns"),fastValue=(key:string)=>fastSettings.find(v=>v.key===`fast.${key}`)?.value||"";
     fastSaltConfigured.value=fastSettings.some(v=>v.key==="fast.access_salt");
+    fastForm.value={use_account:fastValue("use_account"),domain_id:fastValue("domain_id"),domain_name:fastValue("domain_name"),name_strata:fastValue("name_strata")||"host",id_length:Number(fastValue("id_length")||5),start_id:Number(fastValue("start_id")||1)};
+    if(fastForm.value.use_account)await loadFastDomains(false);
   }
 }catch(e){fail(e)}}
 async function open(type:ModalType,row?:any){modal.value=type;editingId.value=row?.id||0;revealed.value=undefined;
@@ -103,6 +106,21 @@ async function saveFastSalt(){
   savingFastSalt.value=true;
   try{await api("/api/settings/fast-ddns",{method:"PUT",body:JSON.stringify({access_salt:fastSalt.value})});fastSalt.value="";fastSaltConfigured.value=true;success("快速 DDNS AccessSalt 已更新")}catch(e){fail(e)}finally{savingFastSalt.value=false}
 }
+async function loadFastDomains(reset=true){
+  fastDomains.value=[];
+  if(reset){fastForm.value.domain_id="";fastForm.value.domain_name=""}
+  if(!fastForm.value.use_account)return;
+  fastDomainsLoading.value=true;
+  try{const r:any=await api(`/api/${encodeURIComponent(fastForm.value.use_account)}/domains?pageNumber=1&pageSize=100`);fastDomains.value=Array.isArray(r?.domains)?r.domains:[]}
+  catch(e){fail(e)}finally{fastDomainsLoading.value=false}
+}
+function selectFastDomain(){fastForm.value.domain_name=fastDomains.value.find(v=>String(v.id)===String(fastForm.value.domain_id))?.domainName||""}
+async function saveFastConfig(){
+  if(!fastForm.value.use_account||!fastForm.value.domain_id||!fastForm.value.domain_name){error.value="请选择快速解析使用的 DNS 账号和承载域名";return}
+  savingFastConfig.value=true;
+  try{await api("/api/settings/fast-ddns",{method:"PUT",body:JSON.stringify(fastForm.value)});success("快速解析配置已保存")}
+  catch(e){fail(e)}finally{savingFastConfig.value=false}
+}
 async function copySecret(){if(revealed.value?.secret)await navigator.clipboard.writeText(revealed.value.secret)}
 onMounted(load);
 </script>
@@ -118,6 +136,7 @@ onMounted(load);
     <section class="card settings-list"><div class="settings-head"><div><h3><UserRoundCheck/>域名授权</h3><p class="muted">用户对权限节点的访问级别。</p></div><button class="primary" @click="open('grant')"><Plus/>授权</button></div><div v-if="!grants.length" class="empty compact">暂无域名授权</div><div v-for="g in grants" :key="g.id" class="setting-row"><span><b>{{userName(g.userId)}} → <span class="mono">{{scopeName(g.scopeId)}}</span></b><small>{{permissionLabel(g.level)}}</small></span><span class="row-actions"><button class="icon-button" title="编辑" @click="open('grant',g)"><Pencil/></button><button class="icon-button danger" title="撤销" @click="remove(`/api/domain-grants/${g.id}`,'确定撤销此域名授权？')"><Trash2/></button></span></div></section>
     <section class="card"><div class="settings-head"><div><h3>注册策略</h3><p class="muted">默认关闭公开注册。</p></div><button class="primary" @click="saveRegistration">保存</button></div><label class="remember-row"><input v-model="registrationOpen" type="checkbox"><span>允许公开注册普通用户</span></label></section>
     <section class="card"><div class="settings-head"><div><h3>CNAME 委托承载域名</h3><p class="muted">外部证书的 DNS-01 TXT 承载位置。</p></div><button class="primary" @click="saveDelegation">保存</button></div><div class="form-grid"><select v-model="delegationForm.apply_account" @change="loadDelegationDomains(true)"><option value="">选择 DNS 账号</option><option v-for="a in accounts" :value="a.name">{{a.name}} · {{a.providerType}}</option></select><select v-model="delegationForm.apply_domain_id" @change="selectDelegationDomain"><option value="">选择承载域名</option><option v-for="d in delegationDomains" :value="d.id">{{d.domainName}}</option></select><input v-model="delegationForm.apply_prefix" placeholder="可选前缀，如 acme"></div><p v-if="delegationForm.apply_domain_name" class="mono muted">{{delegationForm.apply_prefix?delegationForm.apply_prefix+'.':''}}&lt;哈希&gt;.{{delegationForm.apply_domain_name}}.</p></section>
+    <section class="card"><div class="settings-head"><div><h3><Network/>快速解析承载配置</h3><p class="muted">新建快速 DDNS 记录时使用的厂商账号、真实 Zone 和编号规则。</p></div><button class="primary" :disabled="savingFastConfig" @click="saveFastConfig">{{savingFastConfig?'保存中…':'保存'}}</button></div><div class="form-grid"><label>DNS 账号<select v-model="fastForm.use_account" required @change="loadFastDomains(true)"><option value="">选择 DNS 账号</option><option v-for="a in accounts" :key="a.id" :value="a.name">{{a.name}} · {{a.providerType}}</option></select></label><label>承载域名<select v-model="fastForm.domain_id" required :disabled="!fastForm.use_account||fastDomainsLoading" @change="selectFastDomain"><option value="">{{fastDomainsLoading?'正在加载…':fastForm.use_account?'选择域名':'请先选择 DNS 账号'}}</option><option v-for="d in fastDomains" :key="d.id" :value="String(d.id)">{{d.domainName}}</option></select></label><label>记录前缀<input v-model.trim="fastForm.name_strata" required maxlength="32" placeholder="例如 host"></label><label>编号长度<input v-model.number="fastForm.id_length" type="number" min="1" max="12" required></label><label>起始编号<input v-model.number="fastForm.start_id" type="number" min="0" required></label></div><div v-if="fastForm.domain_name" class="selection-summary"><small>新记录格式</small><b class="mono">{{fastForm.name_strata}}{{String(fastForm.start_id).padStart(fastForm.id_length,'0')}}.{{fastForm.domain_name}}</b><small>Domain ID</small><b class="mono">{{fastForm.domain_id}}</b></div><p class="muted compact-note">修改配置只影响后续创建的记录，现有记录仍使用创建时保存的 DNS 账号和 Zone。</p></section>
     <section class="card"><div class="settings-head"><div><h3><KeyRound/>快速 DDNS AccessSalt</h3><p class="muted">用于保护快速 DDNS 创建接口，不会从服务器回显。</p></div><span class="badge">{{fastSaltConfigured?'已配置':'未配置'}}</span></div><label>新 AccessSalt<input v-model="fastSalt" type="password" minlength="16" autocomplete="new-password" :placeholder="fastSaltConfigured?'留空保持当前值':'至少 16 个字符'"></label><p class="muted compact-note">更新后旧 AccessSalt 立即失效。建议使用随机生成值，并通过安全渠道保存。</p><div class="row-actions settings-save-actions"><button class="secondary" type="button" @click="generateFastSalt">生成随机值</button><button class="primary" type="button" :disabled="savingFastSalt||fastSalt.length<16" @click="saveFastSalt">{{savingFastSalt?'保存中…':'更新 AccessSalt'}}</button></div></section>
   </template>
 

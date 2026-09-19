@@ -26,7 +26,7 @@ func InitDB() error {
 		}
 	}
 	// 自动迁移（创建/更新表结构）
-	err = db.AutoMigrate(&models.Domains{}, &models.Certificate{}, &models.CertificateTask{}, &models.CertificateDomain{}, &models.ChallengeCleanup{}, &models.User{}, &models.WebSession{}, &models.AccessKey{}, &models.DNSAccount{}, &models.ACMEProfile{}, &models.DomainScope{}, &models.DomainGrant{}, &models.SystemSetting{}, &models.AuditLog{}, &models.NodeGroup{}, &models.CertificateNode{}, &models.NodeRegistrationToken{}, &models.UserNodeGroup{}, &models.NodeACMEPolicy{}, &models.NodeRateUsage{}, &models.NodeTaskLease{})
+	err = db.AutoMigrate(&models.Domains{}, &models.Certificate{}, &models.CertificateTask{}, &models.CertificateDomain{}, &models.ChallengeCleanup{}, &models.User{}, &models.WebSession{}, &models.AccessKey{}, &models.DNSAccount{}, &models.ACMEProfile{}, &models.DomainScope{}, &models.DomainGrant{}, &models.SystemSetting{}, &models.AuditLog{}, &models.NodeGroup{}, &models.CertificateNode{}, &models.NodeRegistrationToken{}, &models.UserNodeGroup{}, &models.NodeACMEPolicy{}, &models.NodeRateUsage{}, &models.NodeTaskLease{}, &models.FastDDNSRecord{})
 	if err != nil {
 		return err
 	}

@@ -68,6 +68,12 @@ go build .
 
 ## 🚀 快速开始
 
+### 快速 DDNS 数据迁移
+
+快速解析记录现已存储在 SQLite。升级启动时，如果快速解析数据目录中存在 `fastData.json`，程序会在数据库事务中自动导入记录和编号状态，并使用数据库主密钥加密原有 token。导入成功后，原文件会原子改名为 `fastData.json.bak`；后续启动不会读取 `.bak` 文件。
+
+迁移前建议额外备份 `database.db` 和 `fastData.json`。如果 JSON 损坏、记录缺少 token/RecordId、DNS 账号未配置，或目标 `.bak` 已存在，服务会拒绝启动而不会覆盖原文件。管理后台的“设置 → 快速解析承载配置”用于选择 DNS 账号、承载域名和编号规则。
+
 ### SQLite 升级迁移
 
 从旧版本升级且启动日志出现 `Cannot add a PRIMARY KEY column` 时，先停止重启循环，再运行仓库提供的迁移脚本：
