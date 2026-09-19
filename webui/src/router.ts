@@ -7,6 +7,7 @@ import Settings from "./views/Settings.vue";
 import Quick from "./views/Quick.vue";
 import Register from "./views/Register.vue";
 import Nodes from "./views/Nodes.vue";
+import FastRecords from "./views/FastRecords.vue";
 export default createRouter({
   history: createWebHistory(),
   routes: [
@@ -16,6 +17,7 @@ export default createRouter({
     { path: "/tasks/:taskId?", component: Tasks, meta: { title: "任务日志" } },
     { path: "/settings", component: Settings, meta: { title: "设置" } },
     { path: "/nodes", component: Nodes, meta: { title: "证书节点" } },
+    { path: "/fast-records", component: FastRecords, meta: { title: "快速解析" } },
     {
       path: "/quick",
       component: Quick,

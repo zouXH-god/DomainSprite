@@ -27,14 +27,15 @@ const showSecret = ref(false),
   setupRequired = ref(false),
   error = ref("");
 const isPublic = computed(() => route.meta.public);
-const nav = [
+const nav = computed(() => [
   ["/", "概览", LayoutDashboard],
   ["/dns", "DNS 解析", Network],
   ["/certificates", "证书", ShieldCheck],
   ["/tasks", "任务日志", ScrollText],
   ["/nodes", "证书节点", ServerCog],
   ["/settings", "设置", Settings],
-] as const;
+  ...(session.user?.role === "admin" ? [["/fast-records", "快速解析", Zap] as const] : []),
+] as const);
 function applyTheme() {
   const dark =
     mode.value === "dark" ||

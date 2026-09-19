@@ -66,6 +66,8 @@ func registerRoutes(r *gin.Engine) {
 		api.GET("/meta", views.GetMeta)
 		api.GET("/dashboard", views.GetDashboard)
 		api.GET("/health", views.PrivateHealth)
+		api.GET("/fast-ddns/records", views.RequireAdmin, views.FastRecords)
+		api.PUT("/fast-ddns/records/:recordId", views.RequireAdmin, views.UpdateFastRecord)
 		// 获取域名列表
 		api.GET("/:accountName/domains", views.RequireScope("dns:read"), views.GetDomains)
 		// 获取域名解析记录列表

@@ -108,6 +108,20 @@ func (s *FastStore) FindToken(token string) (FastData, bool) {
 	}
 	return FastData{}, false
 }
+
+// Snapshot returns an isolated copy suitable for read-only management views.
+// The token remains in the internal model and must never be serialized by an
+// API handler; callers should map records to a public DTO first.
+func (s *FastStore) Snapshot() FastDataJson {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := FastDataJson{LastId: s.data.LastId, DataList: make([]FastData, len(s.data.DataList))}
+	copy(result.DataList, s.data.DataList)
+	for i := range result.DataList {
+		result.DataList[i].RecordInfo.Tags = append([]string(nil), result.DataList[i].RecordInfo.Tags...)
+	}
+	return result
+}
 func (s *FastStore) LastID() int { s.mu.RLock(); defer s.mu.RUnlock(); return s.data.LastId }
 
 func NewFastToken() (string, error) {

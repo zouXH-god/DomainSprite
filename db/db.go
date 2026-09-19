@@ -46,7 +46,7 @@ func backupDatabase(path string) error {
 		return fmt.Errorf("打开数据库备份源: %w", err)
 	}
 	defer src.Close()
-	dstPath := path + ".bak." + time.Now().Format("20060102-150405")
+	dstPath := fmt.Sprintf("%s.bak.%s-%d", path, time.Now().Format("20060102-150405.000000000"), os.Getpid())
 	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("创建数据库备份: %w", err)

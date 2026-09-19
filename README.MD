@@ -68,6 +68,26 @@ go build .
 
 ## 🚀 快速开始
 
+### SQLite 升级迁移
+
+从旧版本升级且启动日志出现 `Cannot add a PRIMARY KEY column` 时，先停止重启循环，再运行仓库提供的迁移脚本：
+
+```bash
+sudo systemctl stop domainsprite
+chmod +x ./update.sh
+sudo ./update.sh --db /实际工作目录/database.db --service domainsprite.service
+```
+
+脚本会停止服务、执行数据库完整性检查、创建唯一且经过校验的 SQLite 备份、事务重建旧 `domains` 表、验证主键和记录数量，最后重新启动服务。脚本可以重复执行，已经包含 `db_id` 主键的数据库不会再次迁移。
+
+只迁移数据库、不操作 systemd：
+
+```bash
+./update.sh --db ./database.db --no-service
+```
+
+迁移失败时不要删除原数据库。脚本会输出备份路径和恢复命令；应在服务停止状态下恢复。运行脚本需要系统安装 `sqlite3`。
+
 ### 1. 下载程序包
 
 > 前往 `release` 获取程序包，下载对应版本的程序包。
