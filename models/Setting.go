@@ -36,7 +36,8 @@ type BaseConfig struct {
 	RedisPoint             string   `toml:"RedisPoint" json:"redisPoint"`
 	AllowedOrigins         []string `toml:"AllowedOrigins" json:"allowedOrigins"`
 	ProviderTimeoutSeconds int      `toml:"ProviderTimeoutSeconds"`
-	EncryptionKeyEnv       string   `toml:"EncryptionKeyEnv"`
+	EncryptionKeyEnv       string   `toml:"EncryptionKeyEnv" json:"-"`
+	EncryptionKey          string   `toml:"EncryptionKey" json:"-"`
 }
 type GRPCConfig struct {
 	Enabled          bool   `toml:"Enabled"`
@@ -148,7 +149,7 @@ func (c *Config) Validate() error {
 	if c.FastConfig.UseAccount != "" && !names[c.FastConfig.UseAccount] {
 		return errors.New("UseAccount 引用了不存在的账户")
 	}
-	if c.BaseConfig.EncryptionKeyEnv == "" {
+	if c.BaseConfig.EncryptionKey == "" && c.BaseConfig.EncryptionKeyEnv == "" {
 		c.BaseConfig.EncryptionKeyEnv = "DOMAINSPRITE_MASTER_KEY"
 	}
 	if c.GRPC.Port == "" {

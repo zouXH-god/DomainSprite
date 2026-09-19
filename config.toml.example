@@ -6,6 +6,8 @@ AllowedOrigins=["http://127.0.0.1:5173"]
 ProviderTimeoutSeconds=30
 # 此处填写环境变量名称，变量值必须是随机 32 字节密钥的 base64 或 hex。
 EncryptionKeyEnv="DOMAINSPRITE_MASTER_KEY"
+# 也可以直接填写密钥；非空时优先于 EncryptionKeyEnv。请确保 config.toml 权限为 0600。
+EncryptionKey=""
 
 [certificateConfig]
 # 文件路径属于启动配置；邮箱、CA、并发和重试参数在管理后台配置。

@@ -26,8 +26,9 @@ func SanitizeLegacyConfig(path string, cfg models.Config) error {
 		AllowedOrigins         []string `toml:"AllowedOrigins"`
 		ProviderTimeoutSeconds int      `toml:"ProviderTimeoutSeconds"`
 		EncryptionKeyEnv       string   `toml:"EncryptionKeyEnv"`
+		EncryptionKey          string   `toml:"EncryptionKey"`
 	}
-	base := baseInfra{cfg.BaseConfig.Host, cfg.BaseConfig.Port, cfg.BaseConfig.RedisPoint, cfg.BaseConfig.AllowedOrigins, cfg.BaseConfig.ProviderTimeoutSeconds, cfg.BaseConfig.EncryptionKeyEnv}
+	base := baseInfra{cfg.BaseConfig.Host, cfg.BaseConfig.Port, cfg.BaseConfig.RedisPoint, cfg.BaseConfig.AllowedOrigins, cfg.BaseConfig.ProviderTimeoutSeconds, cfg.BaseConfig.EncryptionKeyEnv, cfg.BaseConfig.EncryptionKey}
 	clean := struct {
 		Base        baseInfra         `toml:"baseConfig"`
 		Certificate certificateInfra  `toml:"certificateConfig"`

@@ -32,12 +32,23 @@ func InitMasterKey(envName string) error {
 	if raw == "" {
 		return fmt.Errorf("环境变量 %s 未设置", envName)
 	}
+	if err := InitMasterKeyValue(raw); err != nil {
+		return fmt.Errorf("环境变量 %s: %w", envName, err)
+	}
+	return nil
+}
+
+// InitMasterKeyValue initializes the database encryption key from a direct
+// base64 or hexadecimal value. The value is copied into process memory and is
+// never retained by this package as text.
+func InitMasterKeyValue(raw string) error {
+	raw = strings.TrimSpace(raw)
 	key, err := base64.StdEncoding.DecodeString(raw)
 	if err != nil || len(key) != 32 {
 		key, err = hex.DecodeString(raw)
 	}
 	if err != nil || len(key) != 32 {
-		return fmt.Errorf("%s 必须是 32 字节密钥的 base64 或 hex", envName)
+		return errors.New("EncryptionKey 必须是 32 字节密钥的 base64 或 hex")
 	}
 	masterKey.Lock()
 	masterKey.value = append([]byte(nil), key...)

@@ -51,3 +51,28 @@ func TestPasswordAndTokenHashing(t *testing.T) {
 		t.Fatal("token generation/hash failed")
 	}
 }
+
+func TestInitMasterKeyValueSupportsBase64AndHex(t *testing.T) {
+	raw := []byte("0123456789abcdef0123456789abcdef")
+	for name, value := range map[string]string{
+		"base64": base64.StdEncoding.EncodeToString(raw),
+		"hex":    "3031323334353637383961626364656630313233343536373839616263646566",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := InitMasterKeyValue(value); err != nil {
+				t.Fatal(err)
+			}
+			encrypted, err := EncryptSecret("direct-config-secret")
+			if err != nil {
+				t.Fatal(err)
+			}
+			plain, err := DecryptSecret(encrypted)
+			if err != nil || plain != "direct-config-secret" {
+				t.Fatalf("plain=%q err=%v", plain, err)
+			}
+		})
+	}
+	if err := InitMasterKeyValue("too-short"); err == nil {
+		t.Fatal("invalid direct key accepted")
+	}
+}

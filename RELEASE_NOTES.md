@@ -1,8 +1,15 @@
-# DomainSprite v1.3.2
+# DomainSprite v1.3.3
 
 本次版本将 DomainSprite 从单一 DNS/证书工具升级为具备 Web 控制台、多用户权限、可恢复证书生命周期和独立签发节点的管理平台。升级前请备份 `database.db`、`config.toml`、`certificateData` 和快速 DDNS 数据目录。
 
-该补丁版本增加快速 DDNS AccessSalt 的前端安全配置入口，并将证书完整包下载名称改为根据 SAN 域名列表生成。功能内容包含 v1.3.0 和 v1.3.1 的全部更新。
+该补丁版本允许直接通过 `EncryptionKey` 配置数据库主密钥，同时保留环境变量和自动 sidecar 密钥模式。功能内容包含此前 v1.3.x 的全部更新。
+
+## v1.3.3 更新
+
+- `baseConfig.EncryptionKey` 可直接填写 32 字节随机密钥的 Base64 或 Hex 值。
+- 直接密钥非空时优先于 `EncryptionKeyEnv`，不会额外生成 sidecar 密钥。
+- 未配置直接密钥时，原有环境变量及 `config.toml.master-key` 行为保持不变。
+- 配置迁移保留直接密钥；敏感字段不会通过 JSON 序列化输出。
 
 ## v1.3.2 更新
 

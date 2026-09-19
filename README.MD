@@ -17,6 +17,16 @@ $env:DOMAINSPRITE_MASTER_KEY = [Convert]::ToBase64String([byte[]](1..32 | ForEac
 
 未设置环境变量时，程序会自动生成并复用 `config.toml.master-key`，因此本地开发无需手工设置。生产环境建议将生成值放入安全的部署密钥管理系统；更换或丢失该值会导致数据库中的 DNS/ACME 凭据无法解密。空数据库启动时，日志会输出一个 30 分钟有效的一次性 Setup Token，管理页面用它创建首个管理员。
 
+也可以不使用环境变量，直接在 `config.toml` 中设置 32 字节密钥的 Base64 或 Hex 值：
+
+```toml
+[baseConfig]
+EncryptionKeyEnv=""
+EncryptionKey="替换为32字节随机密钥的Base64或Hex值"
+```
+
+`EncryptionKey` 非空时优先使用；否则读取 `EncryptionKeyEnv` 指定的环境变量，再回退到自动生成的 `config.toml.master-key`。直接配置会将主密钥保存在 TOML 中，请确保文件权限为 `0600`、不提交到版本库，并与数据库一起安全备份。
+
 DNS 厂商账户、ACME Profile、AccessKey、用户、域名授权节点和运行参数均保存在 SQLite。旧 TOML 业务配置只在升级后的第一次启动事务导入，此后数据库为唯一来源；确认导入成功后应删除 TOML 备份中的旧明文凭据。
 
 域名权限支持 `example.com`、`dev.example.com`、`api.dev.example.com` 等节点。子域节点仍映射到真实厂商 Zone，默认授权整个子树，不会建立虚假的 DNS Zone。
@@ -267,7 +277,7 @@ go test -race ./...
 go vet ./...
 ```
 
-首次启动时若当前目录不存在 `config.toml`，程序会从内嵌模板自动创建该文件。同时，如果配置指定的 `DOMAINSPRITE_MASTER_KEY` 环境变量尚未设置，会生成随机 256-bit 数据库主密钥，保存为 `config.toml.master-key` 并仅注入当前进程。后续启动会复用该文件，绝不会重新生成或覆盖已有环境变量。请将主密钥文件与数据库一同备份，且不要提交到版本库；遗失主密钥将无法解密数据库中的 DNS/ACME 凭据。
+首次启动时若当前目录不存在 `config.toml`，程序会从内嵌模板自动创建该文件。`EncryptionKey` 非空时直接使用该值；否则，如果 `EncryptionKeyEnv` 指定的环境变量尚未设置，会生成随机 256-bit 数据库主密钥，保存为 `config.toml.master-key` 并仅注入当前进程。后续启动会复用该文件，绝不会重新生成或覆盖已有环境变量。请将实际使用的主密钥与数据库一同备份，且不要提交到版本库；遗失主密钥将无法解密数据库中的 DNS/ACME 凭据。
 
 真实云厂商测试使用 `integration` build tag，并且仅应配置专用测试账户：
 

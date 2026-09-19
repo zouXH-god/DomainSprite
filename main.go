@@ -45,15 +45,21 @@ func main() {
 	if err := models.LoadConfig("config.toml"); err != nil {
 		log.Fatal(err)
 	}
-	keyCreated, keyPath, err := utils.EnsureMasterKey("config.toml", models.AccountConfig.BaseConfig.EncryptionKeyEnv)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if keyCreated {
-		log.Printf("环境变量 %s 未设置，已生成数据库主密钥并安全保存到 %s", models.AccountConfig.BaseConfig.EncryptionKeyEnv, keyPath)
-	}
-	if err := db.InitMasterKey(models.AccountConfig.BaseConfig.EncryptionKeyEnv); err != nil {
-		log.Fatal(err)
+	if models.AccountConfig.BaseConfig.EncryptionKey != "" {
+		if err := db.InitMasterKeyValue(models.AccountConfig.BaseConfig.EncryptionKey); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		keyCreated, keyPath, err := utils.EnsureMasterKey("config.toml", models.AccountConfig.BaseConfig.EncryptionKeyEnv)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if keyCreated {
+			log.Printf("环境变量 %s 未设置，已生成数据库主密钥并安全保存到 %s", models.AccountConfig.BaseConfig.EncryptionKeyEnv, keyPath)
+		}
+		if err := db.InitMasterKey(models.AccountConfig.BaseConfig.EncryptionKeyEnv); err != nil {
+			log.Fatal(err)
+		}
 	}
 	if err := models.InitDataDirectories(); err != nil {
 		log.Fatal(err)
